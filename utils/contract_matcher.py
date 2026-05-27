@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from rapidfuzz import process
+from rapidfuzz import fuzz, process
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,9 @@ def match_vendor_to_contract(
         logger.warning("contract_matcher: contracts_dir '%s' is empty", contracts_dir)
         return None
 
-    result = process.extractOne(vendor_name, stems)
+    # Normalize to lowercase+underscores so "ACME CORP" matches "acme_corp_agreement"
+    normalized_vendor = vendor_name.lower().replace(" ", "_")
+    result = process.extractOne(normalized_vendor, stems, scorer=fuzz.WRatio)
     if result is None:
         logger.warning(
             "contract_matcher: no match found for vendor '%s'", vendor_name
@@ -66,9 +68,10 @@ def match_vendor_to_contract(
     best_stem, score, _ = result
     if score < min_confidence:
         logger.warning(
-            "contract_matcher: best match for '%s' was '%s' (score=%d) — "
+            "contract_matcher: best match for '%s' (normalized: '%s') was '%s' (score=%.1f) — "
             "below threshold %d",
             vendor_name,
+            normalized_vendor,
             best_stem,
             score,
             min_confidence,
