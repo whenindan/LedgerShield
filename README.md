@@ -228,3 +228,17 @@ The full run takes approximately 30–60 seconds depending on API latency. All o
 | `pdfplumber` | PDF text extraction for invoice files |
 | `tenacity` | Automatic retry on rate limit and connection errors |
 | `filelock` | Thread-safe writes to the snooze log |
+
+---
+
+## Streamlit Dashboard (YC Demo)
+
+LedgerShield now includes a professional Streamlit dashboard for high-fidelity demos.
+
+To launch the dashboard:
+1. Ensure you have installed the requirements: `pip install -r requirements.txt`
+2. Run the Streamlit app:
+   ```bash
+   streamlit run app.py
+   ```
+3. Open your browser and navigate to http://localhost:8501
