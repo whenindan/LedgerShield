@@ -231,14 +231,21 @@ The full run takes approximately 30–60 seconds depending on API latency. All o
 
 ---
 
-## Streamlit Dashboard (YC Demo)
+## Modern Omni Dashboard (FastAPI + React)
 
-LedgerShield now includes a professional Streamlit dashboard for high-fidelity demos.
+LedgerShield now features a high-fidelity, modern treasury operations dashboard based on the Omni design system. This interface provides an executive authorization portal for auditing invoices and managing collections.
 
-To launch the dashboard:
+To launch the modern dashboard:
 1. Ensure you have installed the requirements: `pip install -r requirements.txt`
-2. Run the Streamlit app:
+2. Run the FastAPI server:
    ```bash
-   streamlit run app.py
+   python api.py
    ```
-3. Open your browser and navigate to http://localhost:8501
+3. Open your browser and navigate to http://localhost:8000
+
+### Legacy Streamlit Dashboard
+The original Streamlit dashboard is still available for backward compatibility:
+```bash
+streamlit run app.py
+```
+navigate to http://localhost:8501
