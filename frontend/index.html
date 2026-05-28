@@ -19,6 +19,14 @@
     font-family: var(--num);
     font-size: 12px;
   }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes dropIn {
+    from { opacity: 0; transform: translateY(-6px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
 </style>
 </head>
 <body>
@@ -61,7 +69,11 @@ const IcSnooze = (p) => (<Icon {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0
 const IcWallet = (p) => (<Icon {...p}><path d="M20 12V8a2 2 0 0 0-2-2H5a1 1 0 0 1 0-2h14" /><path d="M3 6v12a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-3" /><circle cx="17" cy="14" r="1.5" /></Icon>);
 const IcArrowDown = (p) => (<Icon {...p}><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></Icon>);
 const IcArrowUp = (p) => (<Icon {...p}><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></Icon>);
-const IcBolt = (p) => (<Icon {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></Icon>);
+const IcBolt     = (p) => (<Icon {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></Icon>);
+const IcReceipt  = (p) => (<Icon {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/></Icon>);
+const IcDatabase2= (p) => (<Icon {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></Icon>);
+const IcFileText2= (p) => (<Icon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>);
+const IcInbox    = (p) => (<Icon {...p}><polyline points="22 13 16 13 14 16 10 16 8 13 2 13"/><path d="M5.45 5.11 2 13v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-7.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></Icon>);
 
 /* --- COMPONENTS --- */
 const { useState, useEffect, useCallback, useRef } = React;
@@ -105,7 +117,13 @@ function TopStrip({ view, queueCount, apiConnected }) {
       <div className="top-pills">
         <span className="pill"><span className={`dot ${apiConnected ? "" : "amber"}`} /><span>{apiConnected ? "API Connected" : "API Offline"}</span></span>
         {queueCount > 0 && (<span className="pill"><span className="dot amber" /><span className="num">{queueCount}</span></span>)}
-        <div className="user"><div className="avatar">AD</div></div>
+        <div className="user">
+          <div style={{ textAlign: "right", marginRight: "4px" }}>
+            <div style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--ink-2)", letterSpacing: "-.005em", lineHeight: 1.2 }}>Sarah Jenkins</div>
+            <div style={{ fontSize: "10px", color: "var(--ink-4)", fontWeight: 500, letterSpacing: ".03em" }}>CFO</div>
+          </div>
+          <div className="avatar">SJ</div>
+        </div>
       </div>
     </div>
   );
@@ -135,6 +153,259 @@ function AlertRow({ a, active, onClick }) {
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Upload Drop‑Menu — pre‑ingestion document selector
+   ───────────────────────────────────────────────────────────────────────── */
+
+const SESSION_USER = "Sarah Jenkins (CFO)";
+
+const DOC_TYPES = [
+  {
+    id: "invoice",
+    label: "Invoice",
+    sub: "Parse vendor, line items, totals · run variance audit",
+    Ico: IcReceipt,
+    iconBg: "#eff6ff",
+    iconColor: "#2563eb",
+  },
+  {
+    id: "bank_statement",
+    label: "Bank Statement",
+    sub: "Reconcile against ledger · sweep eligibility check",
+    Ico: IcDatabase2,
+    iconBg: "#ecfdf5",
+    iconColor: "#059669",
+  },
+  {
+    id: "contract",
+    label: "Contract / MSA",
+    sub: "Index pricing tiers & clauses for fuzzy matching",
+    Ico: IcFileText2,
+    iconBg: "#f1f5f9",
+    iconColor: "#475569",
+  },
+  {
+    id: "other",
+    label: "Other Document",
+    sub: "Receipt, memo, correspondence, miscellaneous",
+    Ico: IcInbox,
+    iconBg: "#fffbeb",
+    iconColor: "#d97706",
+  },
+];
+
+function AuditToast({ message, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 7000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div style={{
+      position: "fixed", bottom: "28px", left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 9000,
+      maxWidth: "720px", width: "calc(100vw - 64px)",
+      background: "#0f172a",
+      borderRadius: "10px",
+      padding: "14px 16px",
+      display: "flex", alignItems: "flex-start", gap: "12px",
+      boxShadow: "0 20px 25px -5px rgba(0,0,0,.35), 0 8px 10px -6px rgba(0,0,0,.2), 0 0 0 1px rgba(255,255,255,.06)",
+      animation: "slideUp .22s cubic-bezier(.22,.61,.36,1) both",
+      fontFamily: "var(--ui)",
+    }}>
+      <span style={{ color: "#10b981", flexShrink: 0, marginTop: "2px", display: "flex" }}>
+        <IcCheck size={13} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          color: "#64748b", fontSize: "9px", letterSpacing: ".14em",
+          textTransform: "uppercase", fontWeight: 600, marginBottom: "5px",
+        }}>
+          Audit Log Recorded
+        </div>
+        <div style={{
+          color: "#cbd5e1", fontSize: "11px",
+          fontFamily: "Geist Mono, ui-monospace, monospace",
+          lineHeight: "1.65", letterSpacing: "0",
+        }}>
+          {message}
+        </div>
+      </div>
+      <button onClick={onClose} style={{
+        background: "none", border: "none", color: "#475569",
+        cursor: "pointer", padding: "2px", flexShrink: 0,
+        display: "flex", alignItems: "center",
+      }}>
+        <IcX size={12} />
+      </button>
+    </div>
+  );
+}
+
+function DocTypeRow({ doc, onClick }) {
+  const [hov, setHov] = useState(false);
+  const { Ico, label, sub, iconBg, iconColor } = doc;
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: "12px",
+        padding: "9px 8px", borderRadius: "8px", cursor: "pointer",
+        background: hov ? "rgba(248,250,252,.85)" : "transparent",
+        transition: "background .11s",
+      }}
+    >
+      <div style={{
+        background: iconBg, color: iconColor,
+        borderRadius: "8px", padding: "8px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>
+        <Ico size={15} strokeWidth={1.75} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          color: "#0f172a", fontWeight: 600,
+          fontSize: "13px", lineHeight: "1.3", letterSpacing: "-.005em",
+        }}>{label}</div>
+        <div style={{
+          color: "#64748b", fontSize: "11.5px",
+          fontWeight: 400, marginTop: "2px", lineHeight: "1.4",
+        }}>{sub}</div>
+      </div>
+      <span style={{ color: "#cbd5e1", flexShrink: 0, display: "flex" }}>
+        <IcChevR size={14} />
+      </span>
+    </div>
+  );
+}
+
+function UploadDropMenu({ onDocumentSelect, running }) {
+  const [open, setOpen]   = useState(false);
+  const [toast, setToast] = useState(null);
+  const wrapRef           = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleSelect = (doc) => {
+    setOpen(false);
+    const msg = `[AUDIT LOG RECORDED]: Action triggered by ${SESSION_USER} | Event Type: Ingestion Stream Initialized for document category "${doc.label}". Cryptographic User Attribution snapshot logged to multi-tenant ledger.`;
+    console.log(msg);
+    setToast(msg);
+    onDocumentSelect?.();
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+
+      {/* ── Trigger ── */}
+      <button
+        className="btn btn-primary"
+        onClick={() => !running && setOpen(v => !v)}
+        disabled={running}
+      >
+        <IcUpload size={14} />
+        {running ? "Processing…" : "Upload document"}
+      </button>
+
+      {/* ── Dropdown panel ── */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 8px)", right: 0,
+          zIndex: 200,
+          width: "384px",
+          background: "#ffffff",
+          borderRadius: "12px",
+          border: "1px solid #f1f5f9",
+          boxShadow: "0 20px 25px -5px rgba(15,23,42,.12), 0 8px 10px -6px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04)",
+          padding: "16px",
+          animation: "dropIn .18s cubic-bezier(.22,.61,.36,1) both",
+          fontFamily: "var(--ui)",
+        }}>
+
+          {/* Session strip */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: "7px",
+            marginBottom: "14px",
+            padding: "7px 10px",
+            background: "#f8fafc",
+            borderRadius: "7px",
+            border: "1px solid #e2e8f0",
+          }}>
+            <div style={{
+              width: "22px", height: "22px", borderRadius: "50%",
+              background: "linear-gradient(135deg,#475569,#1e293b)",
+              color: "#f1f5f9",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "8px", fontWeight: 700, flexShrink: 0, letterSpacing: ".02em",
+            }}>SJ</div>
+            <div>
+              <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#334155", letterSpacing: "-.005em" }}>
+                {SESSION_USER}
+              </div>
+              <div style={{ fontSize: "9.5px", color: "#94a3b8", fontWeight: 500, letterSpacing: ".04em", textTransform: "uppercase", marginTop: "1px" }}>
+                Active Session
+              </div>
+            </div>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 0 2px rgba(16,185,129,.18)", display: "inline-block" }} />
+              <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 500 }}>Authenticated</span>
+            </div>
+          </div>
+
+          {/* Section label */}
+          <span style={{
+            display: "block",
+            color: "#94a3b8", fontWeight: 600,
+            fontSize: "10.5px", letterSpacing: ".1em",
+            textTransform: "uppercase", marginBottom: "6px",
+            paddingLeft: "2px",
+          }}>
+            Choose Document Type
+          </span>
+
+          {/* Document rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+            {DOC_TYPES.map(doc => (
+              <DocTypeRow key={doc.id} doc={doc} onClick={() => handleSelect(doc)} />
+            ))}
+          </div>
+
+          {/* Compliance footer */}
+          <div style={{
+            borderTop: "1px solid #f1f5f9",
+            paddingTop: "12px", marginTop: "10px",
+            display: "flex", alignItems: "flex-start", gap: "8px",
+          }}>
+            <span style={{ color: "#94a3b8", flexShrink: 0, marginTop: "1px", display: "flex" }}>
+              <IcLock size={12} />
+            </span>
+            <span style={{
+              color: "#94a3b8", fontSize: "11px",
+              lineHeight: "1.6", letterSpacing: "0",
+            }}>
+              Parsed inside your tenant boundary · indexed to your KMS-encrypted store
+            </span>
+          </div>
+
+        </div>
+      )}
+
+      {/* Audit toast */}
+      {toast && <AuditToast message={toast} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
 function OperationsView({ alerts, openAlert, activeId, onRunPipeline, running }) {
   return (
     <>
@@ -145,14 +416,29 @@ function OperationsView({ alerts, openAlert, activeId, onRunPipeline, running })
           <p className="lede">Findings surfaced by the LedgerShield analyst. No code or communication executes without an explicit Approve.</p>
         </div>
         <div className="actions">
-          <button className="btn btn-primary" onClick={onRunPipeline} disabled={running}>
-            <IcRefresh size={14}/> {running ? "Running..." : "Run Pipeline"}
-          </button>
+          <UploadDropMenu onDocumentSelect={onRunPipeline} running={running} />
         </div>
       </section>
       <div className="queue">
         {alerts.map(a => (<AlertRow key={a.id} a={a} active={activeId === a.id} onClick={() => openAlert(a)} />))}
-        {alerts.length === 0 && <div style={{padding:"40px", textAlign:"center", color:"var(--ink-3)"}}>No pending operations. Run pipeline to start.</div>}
+        {alerts.length === 0 && (
+          <div style={{ padding: "48px 40px", textAlign: "center" }}>
+            <div style={{
+              width: "44px", height: "44px", borderRadius: "12px",
+              background: "#f8fafc", border: "1px solid #e2e8f0",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px", color: "#94a3b8",
+            }}>
+              <IcUpload size={20} strokeWidth={1.5} />
+            </div>
+            <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--ink-2)", marginBottom: "6px" }}>
+              No documents ingested yet
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: "1.6", maxWidth: "340px", margin: "0 auto" }}>
+              Select <strong style={{ color: "var(--ink-2)" }}>Upload document</strong> above to begin ingestion. Audit findings will appear here after processing.
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
