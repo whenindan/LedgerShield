@@ -1,6 +1,6 @@
 # LedgerShield
 
-LedgerShield is an AI-powered accounts payable and receivable auditor. It runs as a single terminal command and executes three sequential phases: auditing inbound vendor invoices against contract terms, detecting whether disputed invoices were already paid, and drafting escalation emails for overdue receivables. All output is printed to the terminal with rich formatting.
+LedgerShield is an AI-powered accounts payable and receivable auditor. It runs either as a single terminal command or through a modern web dashboard, and executes three sequential phases: auditing inbound vendor invoices against contract terms, detecting whether disputed invoices were already paid, and drafting escalation emails for overdue receivables.
 
 ---
 
@@ -54,8 +54,13 @@ This phase demonstrates inbound reply handling. A hardcoded example reply from "
 ```
 ledgershield/
 │
-├── main.py                              # Entry point. Orchestrates all three phases
+├── main.py                              # CLI entry point. Orchestrates all three phases
 │                                        # and prints all output to the terminal via rich.
+│
+├── api.py                               # FastAPI server. Exposes REST endpoints for the
+│                                        # web dashboard: /api/status, /api/data,
+│                                        # /api/run-pipeline, and /api/upload.
+│                                        # Serves the frontend from the /frontend directory.
 │
 ├── llm_client.py                        # Centralized OpenAI wrapper.
 │                                        # extract_structured() calls gpt-4o or gpt-4o-mini
@@ -106,6 +111,12 @@ ledgershield/
 │                                        # Uses filelock to prevent race conditions. Exposes
 │                                        # add_snooze_entry() and is_snoozed() for the collections
 │                                        # pipeline.
+│
+├── frontend/
+│   ├── index.html                       # Single-page dashboard UI (Omni design system).
+│   │                                    # Served by FastAPI at the root route (/).
+│   │
+│   └── v3-styles.css                    # Dashboard stylesheet. Imported by index.html.
 │
 ├── data_sandbox/
 │   │
@@ -207,11 +218,21 @@ cp .env.example .env
 
 ## Running
 
+### CLI
+
 ```bash
 python main.py
 ```
 
 The full run takes approximately 30–60 seconds depending on API latency. All output is printed to the terminal. Dispute emails are also saved to `output/`. The full debug log is written to `ledgershield.log`.
+
+### Web Dashboard
+
+```bash
+python api.py
+```
+
+Open your browser and navigate to `http://localhost:8000`. The dashboard provides an executive authorization portal with live pipeline execution, AR book management, and alert review — all backed by the same engine as the CLI.
 
 ---
 
@@ -228,3 +249,6 @@ The full run takes approximately 30–60 seconds depending on API latency. All o
 | `pdfplumber` | PDF text extraction for invoice files |
 | `tenacity` | Automatic retry on rate limit and connection errors |
 | `filelock` | Thread-safe writes to the snooze log |
+| `fastapi` | REST API server backing the web dashboard |
+| `uvicorn` | ASGI server for FastAPI |
+| `python-multipart` | File upload support for the `/api/upload` endpoint |
