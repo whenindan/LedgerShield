@@ -7,7 +7,6 @@ rich>=13.7.1
 python-dotenv>=1.0.1
 pandas>=2.2.2
 filelock>=3.14.0
-streamlit>=1.51.0
 fastapi>=0.111.0
 uvicorn>=0.30.0
 python-multipart>=0.0.9
