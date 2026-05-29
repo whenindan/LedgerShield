@@ -115,7 +115,7 @@ def extract_text_from_upload(path: Path, ext: str) -> str:
     Returns:
         Extracted text string ready to be written to the pipeline directory.
     """
-    if ext in ("txt", "md"):
+    if ext in ("txt", "md", "csv", "json"):
         return path.read_text(encoding="utf-8")
 
     if ext == "pdf":

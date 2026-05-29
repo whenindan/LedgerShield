@@ -8,9 +8,9 @@ LedgerShield is an AI-powered accounts payable and receivable auditor. It runs e
 
 ### Phase 1 — Invoice Audit
 
-1. LedgerShield reads every file in `data_sandbox/inbound_invoices/`.
+1. LedgerShield processes every invoice file uploaded in the current session.
 2. Each invoice file is sent to `gpt-4o-mini`, which extracts structured data — vendor name, invoice number, line items, subtotal, tax, and total — into an `ExtractedInvoice` object.
-3. The vendor name is fuzzy-matched (via `rapidfuzz`) against contract filenames in `data_sandbox/contracts/`. A match score below 80 means no contract is found and the invoice is auto-passed.
+3. The vendor name is fuzzy-matched (via `rapidfuzz`) against the contract files uploaded in the same session. A match score below 80 means no contract is found and the invoice is auto-passed.
 4. If a contract is found, the extracted invoice JSON and the full contract text are sent together to `gpt-4o`, which checks four things:
    - Whether any unit price exceeds the contract's stated ceiling rate
    - Whether any line item category is prohibited by the contract
@@ -23,29 +23,84 @@ LedgerShield is an AI-powered accounts payable and receivable auditor. It runs e
 
 For each failed invoice:
 
-1. LedgerShield scans `data_sandbox/bank_ledger.csv` to check whether the invoice was already paid via auto-pay. It matches by invoice number in the transaction description, or by amount + vendor name similarity.
+1. If a **Bank Ledger** was uploaded in the session, LedgerShield scans it to check whether the invoice was already paid via auto-pay. It matches by invoice number in the transaction description, or by amount + vendor name similarity.
 2. `gpt-4o-mini` drafts a formal dispute email citing each flag, the specific contract clause violated, and the dollar exposure. If the invoice was already paid, the email leads with urgency and demands an immediate refund.
-3. The drafted email is saved as JSON to `output/dispute_<invoice_number>.json` and printed to the terminal.
+3. The drafted email is saved as JSON to `output/dispute_<invoice_number>.json`.
 
 ### Phase 2 — Collections Queue
 
-1. LedgerShield reads `data_sandbox/accounts_receivable.csv`, which contains all outstanding client invoices with aging data.
+Runs only if an **AR Ledger** was uploaded in the session.
+
+1. LedgerShield reads the AR ledger CSV, which contains outstanding client invoices with aging data.
 2. Any client more than 14 days overdue is flagged as delinquent.
-3. Clients in the snooze log (`data_sandbox/snooze_log.json`) are skipped if their snooze window has not expired.
+3. Clients in the snooze log (`data/snooze_log.json`) are skipped if their snooze window has not expired.
 4. For each active delinquent client, the escalation tier is determined by days overdue:
    - `firm_reminder` — 15 to 29 days overdue
    - `legal_notice` — 30 to 59 days overdue
    - `final_demand` — 60+ days overdue
-5. The client's prior email thread is loaded from `data_sandbox/client_email_history.json`.
-6. `gpt-4o-mini` drafts a collections email with tone and language calibrated to the escalation tier. Tone escalates from professional and direct, to formal with legal consequences, to a final collections-agency warning.
+5. If an **Email History** file was also uploaded, the client's prior thread is loaded to calibrate tone. Without it, the LLM proceeds without prior context.
+6. `gpt-4o-mini` drafts a collections email with tone calibrated to the escalation tier.
 
 ### Phase 3 — Reply Simulation
 
 This phase demonstrates inbound reply handling. A hardcoded example reply from "Orion Dynamics" is passed through the pipeline:
 
-1. `gpt-4o-mini` parses the reply and classifies its intent (`promise_to_pay`, `dispute`, `ignore`, `paid`, or `other`). If the client promises a date, the date is resolved to an absolute ISO date even if stated relatively (e.g., "next Friday").
-2. If the intent is `promise_to_pay`, a snooze entry is written to `data_sandbox/snooze_log.json` with a `snooze_until` date set two days after the promised payment date. This client will be skipped in future collections runs until the window expires.
-3. `gpt-4o-mini` drafts a short confirmation email acknowledging the promise and warning of escalation if payment is not received.
+1. `gpt-4o-mini` parses the reply and classifies its intent (`promise_to_pay`, `dispute`, `ignore`, `paid`, or `other`). If the client promises a date, it is resolved to an absolute ISO date.
+2. If the intent is `promise_to_pay`, a snooze entry is written to `data/snooze_log.json` with a `snooze_until` date set two days after the promised payment date.
+3. `gpt-4o-mini` drafts a short confirmation email acknowledging the promise.
+
+---
+
+## What to Upload
+
+Every analysis run uses only the files uploaded in the current session. No data carries over from previous sessions.
+
+### Upload categories and what they enable
+
+| Category | Label in UI | Format | What it enables |
+|---|---|---|---|
+| `invoice` | Invoice | any | Invoice audit (required) |
+| `contract` | Contract / MSA | any | Audit against contract terms (required for flags) |
+| `bank_ledger` | Bank Ledger | CSV | Payment detection — urgent vs standard dispute |
+| `ar_ledger` | AR Ledger | CSV | Collections queue |
+| `email_history` | Email History | JSON | Calibrated collections tone (optional with AR Ledger) |
+| `other` | Other Document | any | Stored only, not processed |
+
+A session with only **invoice + contract** runs the audit and drafts a dispute email. Add more file types to activate additional pipeline phases.
+
+### Contract filename convention
+
+LedgerShield fuzzy-matches the contract filename against the vendor name extracted from the invoice. Name your contract file so it contains the vendor name:
+- `acme_corp_agreement.md` → matches vendor "Acme Corp"
+- `globex_msa_2024.pdf` → matches vendor "Globex Corp"
+
+A match score below 80 means no contract comparison is run and the invoice auto-passes.
+
+---
+
+## Reference Data (`data/` folder)
+
+The `data/` folder contains reference files you can upload to test the full pipeline:
+
+| File | Upload as | What it contains |
+|---|---|---|
+| `data/acme_invoice_oct.txt` | Invoice | Acme Corp invoice for Oct 2024 with intentional overbilling errors |
+| `data/acme_corp_agreement.md` | Contract / MSA | Acme Corp MSA defining rate ceilings and permitted billing categories |
+| `data/bank_ledger.csv` | Bank Ledger | Outgoing payment register — includes auto-pay TXN-2024-1071 for INV-2024-0847 |
+| `data/accounts_receivable.csv` | AR Ledger | AR aging data with three delinquent clients (Orion Dynamics, Cascade Partners, Meridian Group) |
+| `data/client_email_history.json` | Email History | Prior email threads for the three delinquent clients |
+
+To run a complete demo, upload all five files in one session then click **Proceed to Analysis**.
+
+The `data/inbound_invoices/` and `data/contracts/` subdirectories are used by the CLI only.
+
+---
+
+## DB and Upload Lifecycle
+
+- `uploads.db` and the `uploads/` folder accumulate across server restarts — they are never auto-wiped.
+- Each run is isolated by session: the pipeline only reads files from the current session being processed.
+- To start completely fresh, delete `uploads.db` and the `uploads/` folder. The server recreates both on next start.
 
 ---
 
@@ -54,140 +109,71 @@ This phase demonstrates inbound reply handling. A hardcoded example reply from "
 ```
 ledgershield/
 │
-├── main.py                              # CLI entry point. Orchestrates all three phases
-│                                        # and prints all output to the terminal via rich.
+├── main.py                              # CLI entry point. Reads from data/inbound_invoices/
+│                                        # and data/contracts/. Drop files there to use the CLI.
 │
-├── api.py                               # FastAPI server. Exposes REST endpoints for the
-│                                        # web dashboard: /api/status, /api/data,
-│                                        # /api/run-pipeline, and /api/upload.
-│                                        # Serves the frontend from the /frontend directory.
+├── api.py                               # FastAPI server. Reads invoices, contracts, bank_ledger,
+│                                        # ar_ledger, and email_history from the current upload
+│                                        # session only — nothing is read from data/ at pipeline time.
 │
-├── llm_client.py                        # Centralized OpenAI wrapper.
-│                                        # extract_structured() calls gpt-4o or gpt-4o-mini
-│                                        # and validates the JSON response against a Pydantic
-│                                        # model. generate_text() returns a plain string.
-│                                        # Both functions track token usage for cost reporting.
+├── llm_client.py                        # Centralized OpenAI wrapper. extract_structured() and
+│                                        # generate_text() with token tracking and retry logic.
 │
-├── requirements.txt                     # Pinned Python dependencies (see below).
+├── requirements.txt                     # Pinned Python dependencies.
 ├── .env                                 # Your local secrets — must contain OPENAI_API_KEY.
 ├── .env.example                         # Template showing which variables are required.
 │
 ├── engine/
-│   ├── auditor.py                       # Phase 1: Loads invoice files, sends them to gpt-4o-mini
-│   │                                    # for extraction, fuzzy-matches vendor to a contract,
-│   │                                    # and sends both to gpt-4o for discrepancy detection.
+│   ├── auditor.py                       # Phase 1: Invoice extraction and contract audit.
+│   │                                    # audit_invoices_from_paths() — used by the API.
+│   │                                    # audit_all_invoices() — used by the CLI.
 │   │
-│   ├── recovery.py                      # Phase 1 (recovery leg): Cross-references failed invoices
-│   │                                    # against bank_ledger.csv to detect prior payment,
-│   │                                    # then drafts and saves dispute emails.
+│   ├── recovery.py                      # Phase 1 recovery: optional bank_ledger payment check,
+│   │                                    # dispute email drafting. Skips payment check if no
+│   │                                    # bank_ledger is provided.
 │   │
-│   └── collections.py                   # Phase 2 & 3: Loads AR ledger, filters delinquent clients,
-│                                        # determines escalation tier, drafts collections emails,
-│                                        # and handles reply parsing + snooze logging.
+│   └── collections.py                   # Phase 2 & 3: AR ledger processing, delinquency detection,
+│                                        # escalation tiers, collections email drafting, reply parsing.
+│                                        # Returns empty results if no ar_ledger is provided.
 │
 ├── models/
-│   ├── invoice.py                       # Pydantic models: LineItem, ExtractedInvoice, AuditFlag,
-│   │                                    # AuditResult. These define the JSON schema the LLM must
-│   │                                    # return during extraction and audit.
-│   │
-│   ├── dispute.py                       # Pydantic model: DisputeEmail. Fields: recipient, subject,
-│   │                                    # body, invoice_number, urgent_flag.
-│   │
+│   ├── invoice.py                       # Pydantic models: LineItem, ExtractedInvoice, AuditFlag, AuditResult.
+│   ├── dispute.py                       # Pydantic model: DisputeEmail.
 │   └── collections.py                   # Pydantic models: CollectionsEmail, ParsedReply, SnoozeEntry.
-│                                        # CollectionsEmail enforces the escalation_tier enum.
-│                                        # ParsedReply enforces the intent enum.
 │
 ├── utils/
 │   ├── contract_matcher.py              # Fuzzy vendor-to-contract matching using rapidfuzz.
-│   │                                    # Reads filenames from the contracts/ directory and scores
-│   │                                    # them against the vendor name extracted from the invoice.
-│   │                                    # Returns None if the best match is below score 80.
+│   │                                    # match_vendor_to_contract() — accepts list[Path] (API).
+│   │                                    # match_vendor_to_contract_in_dir() — scans directory (CLI).
 │   │
-│   ├── file_loader.py                   # Dispatches file reads by extension: .txt and .md via
-│   │                                    # plain read, .csv via pandas, .pdf via pdfplumber.
-│   │                                    # Also exposes load_csv_as_dataframe for structured data.
+│   ├── file_loader.py                   # Dispatches file reads by extension. Supports: txt, md,
+│   │                                    # csv, json, pdf, png, jpg, jpeg.
 │   │
-│   └── snooze_store.py                  # Thread-safe read/write for data_sandbox/snooze_log.json.
-│                                        # Uses filelock to prevent race conditions. Exposes
-│                                        # add_snooze_entry() and is_snoozed() for the collections
-│                                        # pipeline.
+│   └── snooze_store.py                  # Thread-safe read/write for data/snooze_log.json.
 │
 ├── frontend/
-│   ├── index.html                       # Single-page dashboard UI (Omni design system).
-│   │                                    # Served by FastAPI at the root route (/).
-│   │
-│   └── v3-styles.css                    # Dashboard stylesheet. Imported by index.html.
+│   ├── index.html                       # Single-page dashboard UI. Served at /.
+│   └── v3-styles.css                    # Dashboard stylesheet.
 │
-├── data_sandbox/
-│   │
-│   ├── inbound_invoices/
-│   │   └── acme_invoice_oct.txt         # SOURCE: A realistic but synthetic vendor invoice from
-│   │                                    # "Acme Corp" for October 2024. Contains intentional errors:
-│   │                                    # the API call unit rate ($0.019/call) exceeds the contract
-│   │                                    # ceiling ($0.012/call), the "Platform Maintenance Fee" is
-│   │                                    # a prohibited billing category under the contract, and the
-│   │                                    # "Data Export Service" is not a permitted billing category.
-│   │                                    # Drop any .txt, .md, .csv, or .pdf invoice here to audit it.
-│   │
-│   ├── contracts/
-│   │   └── acme_corp_agreement.md       # SOURCE: A synthetic Master Service Agreement (MSA-2024-0312)
-│   │                                    # between LedgerShield Inc. and Acme Corp. Defines permitted
-│   │                                    # billing categories, the API Call Ceiling Rate ($0.012/call),
-│   │                                    # prohibited categories (Platform Maintenance Fee), and Net-30
-│   │                                    # payment terms. The filename is used for fuzzy vendor matching —
-│   │                                    # "acme_corp_agreement" matches the vendor name "Acme Corp".
-│   │                                    # Drop any .md contract here to cover additional vendors.
-│   │
-│   ├── bank_ledger.csv                  # SOURCE: A synthetic outbound payment register for LedgerShield.
-│   │                                    # Columns: transaction_id, date, vendor, description, amount, status.
-│   │                                    # TXN-2024-1071 shows an auto-pay of $3,127.50 to Acme Corp with
-│   │                                    # description "Auto-pay INV-2024-0847", which triggers the
-│   │                                    # urgent-refund path in the dispute email for that invoice.
-│   │
-│   ├── accounts_receivable.csv          # SOURCE: A synthetic AR aging ledger for LedgerShield's clients.
-│   │                                    # Columns: client_name, invoice_number, amount_due, invoice_date,
-│   │                                    # days_overdue, contact_email, contract_ref.
-│   │                                    # Five clients are listed; three are delinquent (>14 days overdue):
-│   │                                    #   Orion Dynamics   — 18 days ($4,200)  → firm_reminder
-│   │                                    #   Cascade Partners — 35 days ($11,800) → legal_notice
-│   │                                    #   Meridian Group   — 67 days ($28,500) → final_demand
-│   │
-│   ├── client_email_history.json        # SOURCE: Synthetic prior email threads for delinquent clients.
-│   │                                    # Keyed by client_name. Each entry is a list of email objects
-│   │                                    # (date, from, to, subject, body). The collections engine reads
-│   │                                    # this to give the LLM context about what has already been said
-│   │                                    # so it doesn't repeat earlier communications.
-│   │                                    # Threads exist for: Orion Dynamics (1 email),
-│   │                                    # Cascade Partners (3 emails), Meridian Group (3 emails).
-│   │
-│   └── snooze_log.json                  # GENERATED at runtime. Written by snooze_store.py when a client
-│                                        # replies with a payment promise. Each entry stores client_name,
-│                                        # snooze_until date, reason, and created_at. Clients with an
-│                                        # active snooze entry are skipped in the collections queue.
+├── data/
+│   ├── acme_invoice_oct.txt             # Demo invoice — upload as "Invoice"
+│   ├── acme_corp_agreement.md           # Demo contract — upload as "Contract / MSA"
+│   ├── bank_ledger.csv                  # Demo bank data — upload as "Bank Ledger"
+│   ├── accounts_receivable.csv          # Demo AR data — upload as "AR Ledger"
+│   ├── client_email_history.json        # Demo email history — upload as "Email History"
+│   ├── snooze_log.json                  # GENERATED at runtime by the reply simulation phase
+│   ├── inbound_invoices/                # CLI drop folder for invoices
+│   └── contracts/                       # CLI drop folder for contracts
 │
-├── output/                              # GENERATED at runtime. Dispute email JSON files are written here,
-│                                        # one per flagged invoice: dispute_<invoice_number>.json.
+├── output/                              # GENERATED at runtime. Dispute JSON files written here.
 │
-└── ledgershield.log                     # GENERATED at runtime. Full DEBUG-level log of every LLM call,
-                                         # token count, match score, file loaded, and pipeline step.
+├── uploads/
+│   ├── raw/                             # Raw uploaded files with UUID prefix.
+│   └── processed/                       # Extracted plain-text versions used by the pipeline.
+│
+├── uploads.db                           # SQLite: session and file upload history.
+└── ledgershield.log                     # GENERATED at runtime. Full debug log.
 ```
-
----
-
-## Data Sources
-
-All data files are synthetic and purpose-built for this demo:
-
-| File | What it represents | Used by |
-|---|---|---|
-| `acme_invoice_oct.txt` | Vendor invoice from Acme Corp with intentional overbilling errors | `engine/auditor.py` (Phase 1) |
-| `acme_corp_agreement.md` | Vendor contract defining rate ceilings and permitted billing categories | `engine/auditor.py` (Phase 1) |
-| `bank_ledger.csv` | Outbound payment transactions showing what has already been paid | `engine/recovery.py` (Phase 1) |
-| `accounts_receivable.csv` | Outstanding client invoices with aging and contact data | `engine/collections.py` (Phase 2) |
-| `client_email_history.json` | Prior email threads with delinquent clients | `engine/collections.py` (Phase 2) |
-| `snooze_log.json` | Auto-generated snooze entries when clients promise payment | `utils/snooze_store.py` (Phase 3) |
-
-To add a new vendor invoice, drop any `.txt`, `.md`, `.csv`, or `.pdf` file into `data_sandbox/inbound_invoices/`. To add a matching contract, drop a `.md` file into `data_sandbox/contracts/` — the filename should contain the vendor name so fuzzy matching can connect them (e.g., `globex_corp_agreement.md` for vendor "Globex Corp").
 
 ---
 
@@ -218,21 +204,21 @@ cp .env.example .env
 
 ## Running
 
-### CLI
-
-```bash
-python main.py
-```
-
-The full run takes approximately 30–60 seconds depending on API latency. All output is printed to the terminal. Dispute emails are also saved to `output/`. The full debug log is written to `ledgershield.log`.
-
 ### Web Dashboard
 
 ```bash
 python api.py
 ```
 
-Open your browser and navigate to `http://localhost:8000`. The dashboard provides an executive authorization portal with live pipeline execution, AR book management, and alert review — all backed by the same engine as the CLI.
+Open `http://localhost:8000`. Upload your files using the file drop panel (see **What to Upload** above), then click **Proceed to Analysis**. Use the files in `data/` as a reference dataset to test the full pipeline.
+
+### CLI
+
+```bash
+python main.py
+```
+
+Drop invoice files into `data/inbound_invoices/` and contract files into `data/contracts/`. The bank ledger, AR ledger, and email history are read from `data/` automatically if present. The full run takes 30–60 seconds depending on API latency.
 
 ---
 

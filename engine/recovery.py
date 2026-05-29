@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def check_if_paid(
     invoice: ExtractedInvoice,
-    bank_ledger_path: Path,
+    bank_ledger_path: Path | None,
 ) -> bool:
     """
     Cross-references an invoice against the bank ledger to detect auto-payment.
@@ -28,6 +28,10 @@ def check_if_paid(
     Returns:
         bool: True if the invoice appears to have been paid already.
     """
+    if bank_ledger_path is None:
+        logger.info("No bank ledger uploaded — skipping payment check for '%s'", invoice.invoice_number)
+        return False
+
     df = load_csv_as_dataframe(bank_ledger_path)
 
     invoice_number_lower = invoice.invoice_number.lower()
@@ -156,7 +160,7 @@ Fill all fields of the DisputeEmail model:
 
 def run_recovery(
     audit_result: AuditResult,
-    bank_ledger_path: Path,
+    bank_ledger_path: Path | None,
     output_dir: Path,
 ) -> DisputeEmail | None:
     """

@@ -11,8 +11,8 @@ from models.collections import SnoozeEntry
 
 logger = logging.getLogger(__name__)
 
-SNOOZE_FILE = Path("data_sandbox/snooze_log.json")
-LOCK_FILE = Path("data_sandbox/snooze_log.json.lock")
+SNOOZE_FILE = Path("data/snooze_log.json")
+LOCK_FILE = Path("data/snooze_log.json.lock")
 
 
 def load_snooze_log() -> list[dict]:

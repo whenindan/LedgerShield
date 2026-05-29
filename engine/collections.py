@@ -14,7 +14,7 @@ from utils.snooze_store import add_snooze_entry, is_snoozed
 logger = logging.getLogger(__name__)
 
 
-def get_delinquent_clients(ar_path: Path) -> pd.DataFrame:
+def get_delinquent_clients(ar_path: Path | None) -> pd.DataFrame:
     """
     Loads AR ledger and filters for clients more than 14 days overdue.
 
@@ -24,6 +24,9 @@ def get_delinquent_clients(ar_path: Path) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Filtered rows where days_overdue > 14.
     """
+    if ar_path is None:
+        logger.info("No AR ledger uploaded — returning empty delinquent list")
+        return pd.DataFrame()
     df = load_csv_as_dataframe(ar_path)
     delinquent = df[df["days_overdue"] > 14].copy()
     logger.info("Found %d delinquent client(s) with >14 days overdue", len(delinquent))
@@ -47,7 +50,7 @@ def get_escalation_tier(days_overdue: int) -> str:
     return "final_demand"
 
 
-def get_client_email_history(client_name: str, history_path: Path) -> list[dict]:
+def get_client_email_history(client_name: str, history_path: Path | None) -> list[dict]:
     """
     Retrieves prior email thread for a specific client.
 
@@ -58,6 +61,9 @@ def get_client_email_history(client_name: str, history_path: Path) -> list[dict]
     Returns:
         list[dict]: List of email objects, empty list if client not found.
     """
+    if history_path is None:
+        logger.info("No email history uploaded — returning empty history for '%s'", client_name)
+        return []
     history = load_json_file(history_path)
     if client_name not in history:
         logger.warning("No email history found for client '%s'", client_name)
@@ -267,7 +273,7 @@ Return only the email body text — no subject line, no metadata, no salutation 
     }
 
 
-def run_collections(ar_path: Path, history_path: Path) -> list[dict]:
+def run_collections(ar_path: Path | None, history_path: Path | None) -> list[dict]:
     """
     Orchestrates the full collections flow for all delinquent clients.
 
@@ -278,6 +284,9 @@ def run_collections(ar_path: Path, history_path: Path) -> list[dict]:
     Returns:
         list[dict]: Collection results per client with email and snooze status.
     """
+    if ar_path is None:
+        logger.info("No AR ledger in session — skipping collections phase")
+        return []
     delinquent = get_delinquent_clients(ar_path)
     results: list[dict] = []
 
