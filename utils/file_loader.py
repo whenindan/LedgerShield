@@ -1,10 +1,13 @@
 """File loading utilities for invoices and supporting documents."""
 
 import json
+import logging
 from pathlib import Path
 
 import pandas as pd
 import pdfplumber
+
+logger = logging.getLogger(__name__)
 
 
 def load_text_file(path: Path) -> str:
@@ -95,6 +98,57 @@ def load_json_file(path: Path) -> dict | list:
     """
     with path.open(encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def extract_text_from_upload(path: Path, ext: str) -> str:
+    """Extract plain text from an uploaded file for pipeline ingestion.
+
+    Dispatches by extension:
+      .txt / .md  → direct UTF-8 read
+      .pdf        → pdfplumber page extraction
+      .png / .jpg → pytesseract OCR (gracefully degrades if not installed)
+
+    Args:
+        path: Absolute path to the uploaded raw file.
+        ext:  Lowercase extension without the dot (e.g. "pdf", "png").
+
+    Returns:
+        Extracted text string ready to be written to the pipeline directory.
+    """
+    if ext in ("txt", "md"):
+        return path.read_text(encoding="utf-8")
+
+    if ext == "pdf":
+        with pdfplumber.open(path) as pdf:
+            pages = [page.extract_text() or "" for page in pdf.pages]
+        text = "\n".join(pages).strip()
+        if not text:
+            logger.warning("pdfplumber extracted no text from %s — may be a scanned PDF", path.name)
+            text = f"[PDF FILE: {path.name} — no extractable text layer; manual review required]"
+        return text
+
+    if ext in ("png", "jpg", "jpeg"):
+        try:
+            import pytesseract
+            from PIL import Image
+            img = Image.open(path)
+            text = pytesseract.image_to_string(img).strip()
+            if not text:
+                text = f"[IMAGE FILE: {path.name} — OCR returned no text; manual review required]"
+            return text
+        except ImportError:
+            logger.warning(
+                "pytesseract / Pillow not installed — returning placeholder for %s", path.name
+            )
+            return (
+                f"[IMAGE FILE: {path.name} — install pytesseract and Pillow for OCR. "
+                "Manual review required until then.]"
+            )
+        except Exception as exc:
+            logger.error("OCR failed for %s: %s", path.name, exc)
+            return f"[IMAGE FILE: {path.name} — OCR error: {exc}]"
+
+    raise ValueError(f"Unsupported upload extension '{ext}' for file '{path.name}'")
 
 
 def load_invoice_file(path: Path) -> str:

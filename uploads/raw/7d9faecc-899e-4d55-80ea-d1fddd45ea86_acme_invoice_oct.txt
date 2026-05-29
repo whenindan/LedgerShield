@@ -1,0 +1,89 @@
+================================================================================
+                              ACME CORP
+                    4800 Technology Drive, Suite 200
+                           Austin, TX 78701
+                          billing@acmecorp.com
+                            +1 (512) 944-2200
+================================================================================
+
+INVOICE
+
+Invoice Number  : INV-2024-0847
+Invoice Date    : November 4, 2024
+Billing Period  : October 1, 2024 – October 31, 2024
+Payment Due     : December 4, 2024
+Contract Ref    : MSA-2024-0312
+
+--------------------------------------------------------------------------------
+BILL TO
+
+LedgerShield Inc.
+Accounts Payable Department
+101 Market Street, Suite 1400
+San Francisco, CA 94105
+ap@ledgershield.com
+
+--------------------------------------------------------------------------------
+LINE ITEMS
+
++------------------------------------------------------+----------+-----------+
+| Description                                          | Qty/Unit |    Amount |
++------------------------------------------------------+----------+-----------+
+| API Usage – October 2024                             |          |           |
+|   Metered API calls                                  | 12,500   |           |
+|   Unit rate: $0.019 per call                         |          |   $237.50 |
++------------------------------------------------------+----------+-----------+
+| Platform Access License – October 2024               |          |           |
+|   Monthly SaaS platform access (standard tier)       | 1 month  | $1,800.00 |
++------------------------------------------------------+----------+-----------+
+| Platform Maintenance Fee                             |          |           |
+|   Infrastructure upkeep, patch management           | 1 month  |   $450.00 |
++------------------------------------------------------+----------+-----------+
+| Data Export Service                                  |          |           |
+|   Bulk data exports processed during billing period  | 4 runs   |   $148.00 |
++------------------------------------------------------+----------+-----------+
+| Professional Services – Ad-hoc Support               |          |           |
+|   5 hrs @ $113.00/hr                                 | 5 hrs    |   $565.00 |
++------------------------------------------------------+----------+-----------+
+
+--------------------------------------------------------------------------------
+SUMMARY
+
+    Subtotal                                                      $3,127.50
+    Tax (0%)                                                          $0.00
+                                                             ------------
+    TOTAL DUE                                                     $3,127.50
+
+--------------------------------------------------------------------------------
+PAYMENT INSTRUCTIONS
+
+Please remit payment within 30 days of the invoice date.
+
+Wire Transfer:
+  Bank Name    : First National Commercial Bank
+  Account Name : Acme Corp Operating Account
+  Routing No.  : 021000021
+  Account No.  : 7840239105
+
+ACH / Check:
+  Payable to: Acme Corp
+  Mail to: Acme Corp, Attn: Accounts Receivable
+           4800 Technology Drive, Suite 200
+           Austin, TX 78701
+
+Online Payment Portal: https://pay.acmecorp.com (Invoice # required)
+
+Please reference invoice number INV-2024-0847 on all payments.
+
+--------------------------------------------------------------------------------
+BILLING CONTACT
+
+Questions regarding this invoice should be directed to:
+
+  Acme Corp Billing Team
+  billing@acmecorp.com
+  +1 (512) 944-2200 ext. 5
+
+--------------------------------------------------------------------------------
+Thank you for your business. We appreciate your continued partnership.
+================================================================================
