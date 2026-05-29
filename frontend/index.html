@@ -27,6 +27,32 @@
     from { opacity: 0; transform: translateY(-6px) scale(.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .ls-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .65s linear infinite;
+    display: inline-block; flex-shrink: 0;
+  }
+  .ls-spinner.dark {
+    border-color: rgba(15,23,42,.12);
+    border-top-color: #0f172a;
+  }
+  .staging-row {
+    display: grid;
+    grid-template-columns: 36px 1fr auto auto auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--rule);
+    transition: background .1s;
+  }
+  .staging-row:last-child { border-bottom: 0; }
+  .staging-row:hover { background: var(--canvas); }
 </style>
 </head>
 <body>
@@ -73,7 +99,9 @@ const IcBolt     = (p) => (<Icon {...p}><polygon points="13 2 3 14 12 14 11 22 2
 const IcReceipt  = (p) => (<Icon {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><path d="M14 8H8"/><path d="M16 12H8"/><path d="M13 16H8"/></Icon>);
 const IcDatabase2= (p) => (<Icon {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></Icon>);
 const IcFileText2= (p) => (<Icon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>);
-const IcInbox    = (p) => (<Icon {...p}><polyline points="22 13 16 13 14 16 10 16 8 13 2 13"/><path d="M5.45 5.11 2 13v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-7.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></Icon>);
+const IcInbox      = (p) => (<Icon {...p}><polyline points="22 13 16 13 14 16 10 16 8 13 2 13"/><path d="M5.45 5.11 2 13v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-7.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></Icon>);
+const IcTrash      = (p) => (<Icon {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></Icon>);
+const IcArrowRight = (p) => (<Icon {...p}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></Icon>);
 
 /* --- COMPONENTS --- */
 const { useState, useEffect, useCallback, useRef } = React;
@@ -159,6 +187,24 @@ function AlertRow({ a, active, onClick }) {
 
 const SESSION_USER = "Sarah Jenkins (CFO)";
 
+function genUUID() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function fmtBytes(bytes) {
+  if (bytes < 1024)        return `${bytes} B`;
+  if (bytes < 1048576)     return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function fmtTime(isoUtc) {
+  const d = new Date(isoUtc + "Z");
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
 const DOC_TYPES = [
   {
     id: "invoice",
@@ -194,9 +240,9 @@ const DOC_TYPES = [
   },
 ];
 
-function AuditToast({ message, onClose }) {
+function AuditToast({ message, onClose, isError = false }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 7000);
+    const t = setTimeout(onClose, isError ? 8000 : 7000);
     return () => clearTimeout(t);
   }, []);
   return (
@@ -205,7 +251,7 @@ function AuditToast({ message, onClose }) {
       transform: "translateX(-50%)",
       zIndex: 9000,
       maxWidth: "720px", width: "calc(100vw - 64px)",
-      background: "#0f172a",
+      background: isError ? "#450a0a" : "#0f172a",
       borderRadius: "10px",
       padding: "14px 16px",
       display: "flex", alignItems: "flex-start", gap: "12px",
@@ -213,15 +259,15 @@ function AuditToast({ message, onClose }) {
       animation: "slideUp .22s cubic-bezier(.22,.61,.36,1) both",
       fontFamily: "var(--ui)",
     }}>
-      <span style={{ color: "#10b981", flexShrink: 0, marginTop: "2px", display: "flex" }}>
-        <IcCheck size={13} />
+      <span style={{ color: isError ? "#f87171" : "#10b981", flexShrink: 0, marginTop: "2px", display: "flex" }}>
+        {isError ? <IcAlert size={13} /> : <IcCheck size={13} />}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          color: "#64748b", fontSize: "9px", letterSpacing: ".14em",
+          color: isError ? "#fca5a5" : "#64748b", fontSize: "9px", letterSpacing: ".14em",
           textTransform: "uppercase", fontWeight: 600, marginBottom: "5px",
         }}>
-          Audit Log Recorded
+          {isError ? "Upload Error" : "Audit Log Recorded"}
         </div>
         <div style={{
           color: "#cbd5e1", fontSize: "11px",
@@ -282,10 +328,14 @@ function DocTypeRow({ doc, onClick }) {
   );
 }
 
-function UploadDropMenu({ onDocumentSelect, running }) {
-  const [open, setOpen]   = useState(false);
-  const [toast, setToast] = useState(null);
-  const wrapRef           = useRef(null);
+function UploadDropMenu({ sessionId, onFileUploaded, disabled, compact = false }) {
+  const [open, setOpen]           = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [toast, setToast]         = useState(null);
+  const [selCat, setSelCat]       = useState(null);
+  const wrapRef                   = useRef(null);
+  const fileInputRef              = useRef(null);
+  const [errToast, setErrToast]   = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -296,35 +346,75 @@ function UploadDropMenu({ onDocumentSelect, running }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const handleSelect = (doc) => {
+  const handleCategoryClick = (doc) => {
+    setSelCat(doc.id);
     setOpen(false);
-    const msg = `[AUDIT LOG RECORDED]: Action triggered by ${SESSION_USER} | Event Type: Ingestion Stream Initialized for document category "${doc.label}". Cryptographic User Attribution snapshot logged to multi-tenant ledger.`;
-    console.log(msg);
-    setToast(msg);
-    onDocumentSelect?.();
+    setTimeout(() => fileInputRef.current?.click(), 60);
   };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";           // reset so same file can be re-selected
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file",       file);
+      fd.append("category",   selCat);
+      fd.append("session_id", sessionId);
+      fd.append("user_name",  SESSION_USER);
+      const res = await fetch("/api/upload/file", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Upload failed");
+      }
+      const data = await res.json();
+      const msg = `[AUDIT LOG RECORDED]: Action triggered by ${SESSION_USER} | Event Type: Ingestion Stream Initialized for document category "${selCat}". File "${file.name}" staged. Cryptographic User Attribution snapshot logged to multi-tenant ledger.`;
+      console.log(msg);
+      setToast(msg);
+      onFileUploaded?.(data);
+    } catch (err) {
+      setErrToast(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const isDisabled = disabled || uploading;
+  const label = uploading ? "Uploading…" : compact ? "Upload more" : "Upload document";
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
 
-      {/* ── Trigger ── */}
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.md,.txt"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      {/* Trigger button */}
       <button
         className="btn btn-primary"
-        onClick={() => !running && setOpen(v => !v)}
-        disabled={running}
+        onClick={() => !isDisabled && setOpen(v => !v)}
+        disabled={isDisabled}
+        style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
       >
-        <IcUpload size={14} />
-        {running ? "Processing…" : "Upload document"}
+        {uploading
+          ? <span className="ls-spinner" />
+          : <IcUpload size={14} />
+        }
+        {label}
       </button>
 
-      {/* ── Dropdown panel ── */}
+      {/* Dropdown panel */}
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
-          zIndex: 200,
-          width: "384px",
-          background: "#ffffff",
-          borderRadius: "12px",
+          zIndex: 200, width: "384px",
+          background: "#ffffff", borderRadius: "12px",
           border: "1px solid #f1f5f9",
           boxShadow: "0 20px 25px -5px rgba(15,23,42,.12), 0 8px 10px -6px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04)",
           padding: "16px",
@@ -335,26 +425,18 @@ function UploadDropMenu({ onDocumentSelect, running }) {
           {/* Session strip */}
           <div style={{
             display: "flex", alignItems: "center", gap: "7px",
-            marginBottom: "14px",
-            padding: "7px 10px",
-            background: "#f8fafc",
-            borderRadius: "7px",
-            border: "1px solid #e2e8f0",
+            marginBottom: "14px", padding: "7px 10px",
+            background: "#f8fafc", borderRadius: "7px", border: "1px solid #e2e8f0",
           }}>
             <div style={{
               width: "22px", height: "22px", borderRadius: "50%",
-              background: "linear-gradient(135deg,#475569,#1e293b)",
-              color: "#f1f5f9",
+              background: "linear-gradient(135deg,#475569,#1e293b)", color: "#f1f5f9",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "8px", fontWeight: 700, flexShrink: 0, letterSpacing: ".02em",
             }}>SJ</div>
             <div>
-              <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#334155", letterSpacing: "-.005em" }}>
-                {SESSION_USER}
-              </div>
-              <div style={{ fontSize: "9.5px", color: "#94a3b8", fontWeight: 500, letterSpacing: ".04em", textTransform: "uppercase", marginTop: "1px" }}>
-                Active Session
-              </div>
+              <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#334155", letterSpacing: "-.005em" }}>{SESSION_USER}</div>
+              <div style={{ fontSize: "9.5px", color: "#94a3b8", fontWeight: 500, letterSpacing: ".04em", textTransform: "uppercase", marginTop: "1px" }}>Active Session</div>
             </div>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "5px" }}>
               <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 0 2px rgba(16,185,129,.18)", display: "inline-block" }} />
@@ -364,11 +446,9 @@ function UploadDropMenu({ onDocumentSelect, running }) {
 
           {/* Section label */}
           <span style={{
-            display: "block",
-            color: "#94a3b8", fontWeight: 600,
+            display: "block", color: "#94a3b8", fontWeight: 600,
             fontSize: "10.5px", letterSpacing: ".1em",
-            textTransform: "uppercase", marginBottom: "6px",
-            paddingLeft: "2px",
+            textTransform: "uppercase", marginBottom: "6px", paddingLeft: "2px",
           }}>
             Choose Document Type
           </span>
@@ -376,37 +456,270 @@ function UploadDropMenu({ onDocumentSelect, running }) {
           {/* Document rows */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
             {DOC_TYPES.map(doc => (
-              <DocTypeRow key={doc.id} doc={doc} onClick={() => handleSelect(doc)} />
+              <DocTypeRow key={doc.id} doc={doc} onClick={() => handleCategoryClick(doc)} />
             ))}
           </div>
 
           {/* Compliance footer */}
           <div style={{
-            borderTop: "1px solid #f1f5f9",
-            paddingTop: "12px", marginTop: "10px",
+            borderTop: "1px solid #f1f5f9", paddingTop: "12px", marginTop: "10px",
             display: "flex", alignItems: "flex-start", gap: "8px",
           }}>
             <span style={{ color: "#94a3b8", flexShrink: 0, marginTop: "1px", display: "flex" }}>
               <IcLock size={12} />
             </span>
-            <span style={{
-              color: "#94a3b8", fontSize: "11px",
-              lineHeight: "1.6", letterSpacing: "0",
-            }}>
+            <span style={{ color: "#94a3b8", fontSize: "11px", lineHeight: "1.6" }}>
               Parsed inside your tenant boundary · indexed to your KMS-encrypted store
             </span>
           </div>
-
         </div>
       )}
 
-      {/* Audit toast */}
-      {toast && <AuditToast message={toast} onClose={() => setToast(null)} />}
+      {toast    && <AuditToast message={toast}    onClose={() => setToast(null)} />}
+      {errToast && <AuditToast message={`Upload error: ${errToast}`} onClose={() => setErrToast(null)} isError />}
     </div>
   );
 }
 
-function OperationsView({ alerts, openAlert, activeId, onRunPipeline, running }) {
+/* ─────────────────────────────────────────────────────────────────────────
+   Upload Staging View — review staged files before OCR + pipeline
+   ───────────────────────────────────────────────────────────────────────── */
+
+const CAT_META = {
+  invoice:       { label: "Invoice",        Ico: IcReceipt,   iconBg: "#eff6ff", iconColor: "#2563eb",  badgeBg: "#dbeafe", badgeColor: "#1d4ed8" },
+  bank_statement:{ label: "Bank Statement", Ico: IcDatabase2, iconBg: "#ecfdf5", iconColor: "#059669",  badgeBg: "#d1fae5", badgeColor: "#065f46" },
+  contract:      { label: "Contract / MSA", Ico: IcFileText2, iconBg: "#f1f5f9", iconColor: "#475569",  badgeBg: "#f1f5f9", badgeColor: "#334155" },
+  other:         { label: "Other Document", Ico: IcInbox,     iconBg: "#fffbeb", iconColor: "#d97706",  badgeBg: "#fef3c7", badgeColor: "#92400e" },
+};
+
+function StagingFileRow({ file, onRemove, removing }) {
+  const meta = CAT_META[file.category] || CAT_META.other;
+  const { Ico } = meta;
+  return (
+    <div className="staging-row">
+      {/* Category icon */}
+      <div style={{
+        width: "36px", height: "36px", borderRadius: "8px",
+        background: meta.iconBg, color: meta.iconColor,
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}>
+        <Ico size={16} strokeWidth={1.75} />
+      </div>
+
+      {/* Filename + meta */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontWeight: 600, fontSize: "13px", color: "var(--ink)",
+          letterSpacing: "-.005em", lineHeight: "1.3",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {file.original_filename}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center",
+            padding: "1px 7px", borderRadius: "4px",
+            background: meta.badgeBg, color: meta.badgeColor,
+            fontSize: "10px", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase",
+          }}>
+            {meta.label}
+          </span>
+          <span style={{
+            display: "inline-flex", alignItems: "center",
+            padding: "1px 7px", borderRadius: "4px",
+            background: "#f1f5f9", color: "#475569",
+            fontSize: "10px", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase",
+          }}>
+            .{file.file_ext}
+          </span>
+        </div>
+      </div>
+
+      {/* Size */}
+      <div style={{ textAlign: "right", minWidth: "64px" }}>
+        <div style={{ fontFamily: "var(--num)", fontSize: "12.5px", color: "var(--ink-2)", fontWeight: 500 }}>
+          {fmtBytes(file.file_size)}
+        </div>
+        <div style={{ fontSize: "10.5px", color: "var(--ink-3)", marginTop: "3px" }}>
+          {fmtTime(file.uploaded_at)}
+        </div>
+      </div>
+
+      {/* Uploaded by */}
+      <div style={{ minWidth: "140px" }}>
+        <div style={{ fontSize: "11.5px", color: "var(--ink-2)", fontWeight: 500 }}>
+          {file.uploaded_by}
+        </div>
+        <div style={{ fontSize: "10.5px", color: "var(--ink-3)", marginTop: "3px" }}>Uploader</div>
+      </div>
+
+      {/* Remove */}
+      <button
+        onClick={() => onRemove(file.file_id)}
+        disabled={removing === file.file_id}
+        style={{
+          background: "none", border: "1px solid #e2e8f0", borderRadius: "6px",
+          color: removing === file.file_id ? "#cbd5e1" : "#94a3b8",
+          cursor: removing === file.file_id ? "default" : "pointer",
+          padding: "6px", display: "flex", alignItems: "center",
+          transition: "color .1s, border-color .1s",
+          flexShrink: 0,
+        }}
+        title="Remove file"
+      >
+        {removing === file.file_id
+          ? <span className="ls-spinner dark" />
+          : <IcTrash size={13} />
+        }
+      </button>
+    </div>
+  );
+}
+
+function UploadStagingView({ sessionId, stagedFiles, setStagedFiles, onFileUploaded, onCancel, onProceed, processing }) {
+  const [removing, setRemoving] = useState(null);
+
+  const removeFile = async (file_id) => {
+    setRemoving(file_id);
+    try {
+      const res = await fetch(`/api/upload/file/${file_id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setStagedFiles(prev => prev.filter(f => f.file_id !== file_id));
+    } catch (e) {
+      alert("Failed to remove file: " + e.message);
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const categoryBreakdown = DOC_TYPES.map(dt => ({
+    ...dt,
+    count: stagedFiles.filter(f => f.category === dt.id).length,
+  })).filter(dt => dt.count > 0);
+
+  return (
+    <>
+      {/* Processing overlay */}
+      {processing && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 500,
+          background: "rgba(15,23,42,.55)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: "16px",
+          backdropFilter: "blur(2px)",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: "14px", padding: "32px 40px",
+            textAlign: "center", maxWidth: "380px",
+            boxShadow: "0 20px 40px -8px rgba(15,23,42,.3)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
+              <span className="ls-spinner dark" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: "15px", color: "var(--ink)", marginBottom: "8px" }}>
+              Extracting & Analysing
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: "1.6" }}>
+              Running OCR on {stagedFiles.length} file{stagedFiles.length !== 1 ? "s" : ""}, then executing the full LedgerShield pipeline…
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ── */}
+      <section className="view-head">
+        <div>
+          <div className="eyebrow"><span className="dot" style={{ background: "var(--amber)" }} /> Upload Session · Staging</div>
+          <h1>Staged <em>Documents</em></h1>
+          <p className="lede">Review your uploads below. Click <strong>Proceed to Analysis</strong> to run OCR extraction and the full audit pipeline, or <strong>Cancel</strong> to discard this session.</p>
+        </div>
+
+        {/* Summary chips */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {categoryBreakdown.map(dt => (
+              <div key={dt.id} style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "5px 10px", borderRadius: "7px",
+                background: dt.iconBg, border: `1px solid ${dt.iconColor}22`,
+              }}>
+                <dt.Ico size={12} strokeWidth={2} style={{ color: dt.iconColor }} />
+                <span style={{ fontSize: "11px", fontWeight: 600, color: dt.iconColor }}>
+                  {dt.count} {dt.label}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: "11.5px", color: "var(--ink-3)" }}>
+            Session · <span style={{ fontFamily: "var(--num)", letterSpacing: "-.01em" }}>{sessionId?.slice(0, 8)}…</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── File list ── */}
+      <div className="queue" style={{ marginBottom: "20px" }}>
+        {stagedFiles.length === 0 ? (
+          <div style={{ padding: "48px 40px", textAlign: "center", color: "var(--ink-3)", fontSize: "13.5px" }}>
+            All files removed. Upload more or cancel the session.
+          </div>
+        ) : (
+          stagedFiles.map(file => (
+            <StagingFileRow
+              key={file.file_id}
+              file={file}
+              onRemove={removeFile}
+              removing={removing}
+            />
+          ))
+        )}
+      </div>
+
+      {/* ── Action bar ── */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 0",
+        borderTop: "1px solid var(--rule)",
+      }}>
+        <button className="btn btn-ghost" onClick={onCancel} disabled={processing}>
+          <IcX size={14} /> Cancel session
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <UploadDropMenu
+            sessionId={sessionId}
+            onFileUploaded={onFileUploaded}
+            disabled={processing}
+            compact={true}
+          />
+          <button
+            className="btn btn-emerald"
+            onClick={onProceed}
+            disabled={processing || stagedFiles.length === 0}
+            style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
+          >
+            {processing
+              ? <><span className="ls-spinner" /> Processing…</>
+              : <><IcArrowRight size={14} /> Proceed to Analysis ({stagedFiles.length} file{stagedFiles.length !== 1 ? "s" : ""})</>
+            }
+          </button>
+        </div>
+      </div>
+
+      {/* Compliance note */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: "7px",
+        padding: "10px 0",
+        color: "var(--ink-4)", fontSize: "11px",
+      }}>
+        <IcLock size={12} />
+        All files are parsed inside your isolated tenant boundary and never leave your KMS-encrypted store.
+        Session attributed to <strong style={{ color: "var(--ink-3)" }}>{SESSION_USER}</strong>.
+      </div>
+    </>
+  );
+}
+
+function OperationsView({ alerts, openAlert, activeId, sessionId, onFileUploaded, running }) {
   return (
     <>
       <section className="view-head">
@@ -416,7 +729,7 @@ function OperationsView({ alerts, openAlert, activeId, onRunPipeline, running })
           <p className="lede">Findings surfaced by the LedgerShield analyst. No code or communication executes without an explicit Approve.</p>
         </div>
         <div className="actions">
-          <UploadDropMenu onDocumentSelect={onRunPipeline} running={running} />
+          <UploadDropMenu sessionId={sessionId} onFileUploaded={onFileUploaded} disabled={running} />
         </div>
       </section>
       <div className="queue">
@@ -487,35 +800,107 @@ function Drawer({ alert, onClose }) {
 }
 
 function App() {
-  const [view, setView] = useState("operations");
-  const [alerts, setAlerts] = useState([]);
+  const [view, setView]           = useState("operations");
+  const [alerts, setAlerts]       = useState([]);
   const [activeAlert, setActiveAlert] = useState(null);
-  const [status, setStatus] = useState({ api_connected: false });
-  const [running, setRunning] = useState(false);
+  const [status, setStatus]       = useState({ api_connected: false });
+  const [running, setRunning]     = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [sessionId, setSessionId] = useState(genUUID);
+  const [stagedFiles, setStagedFiles] = useState([]);
+  const [processing, setProcessing]   = useState(false);
 
   useEffect(() => {
-    fetch("/api/status").then(res => res.json()).then(setStatus);
+    fetch("/api/status").then(r => r.json()).then(setStatus).catch(() => {});
   }, []);
 
-  const runPipeline = () => {
-    setRunning(true);
-    fetch("/api/run-pipeline", { method: "POST" })
-      .then(res => res.json())
-      .then(data => {
-        setAlerts(data.alerts);
-        setRunning(false);
-      });
+  // Called when a file upload completes successfully
+  const handleFileUploaded = (fileData) => {
+    setStagedFiles(prev => [...prev, fileData]);
+    setView("upload_staging");
   };
+
+  // Cancel: delete session on server, reset local state
+  const handleCancelSession = async () => {
+    try {
+      await fetch(`/api/upload/session/${sessionId}/cancel`, { method: "POST" });
+    } catch (e) {
+      console.warn("Session cancel request failed:", e);
+    }
+    setStagedFiles([]);
+    setSessionId(genUUID());
+    setView("operations");
+  };
+
+  // Proceed: run OCR + pipeline, show results
+  const handleProcessSession = async () => {
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/upload/session/${sessionId}/process`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Processing failed");
+      }
+      const data = await res.json();
+      setAlerts(data.alerts || []);
+      if (data.pipeline_error) {
+        console.error("Pipeline error:", data.pipeline_error);
+      }
+    } catch (e) {
+      alert("Analysis failed: " + e.message);
+    } finally {
+      setProcessing(false);
+      setStagedFiles([]);
+      setSessionId(genUUID());
+      setView("operations");
+    }
+  };
+
+  const viewLabel = view === "upload_staging" ? "Document Staging" : "Executive Authorization Portal";
+  const titleMap = { operations: "Executive Authorization Portal", cash: "Cash & Liquidity Hub", vault: "Audit Vault & Ledger", settings: "Sandbox Settings", upload_staging: "Document Staging" };
 
   return (
     <div className="app" data-collapsed={collapsed ? "1" : "0"}>
-      <Sidebar view={view} setView={setView} queueCount={alerts.length} collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <Sidebar
+        view={view === "upload_staging" ? "operations" : view}
+        setView={(v) => { if (!processing) setView(v); }}
+        queueCount={alerts.length}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(c => !c)}
+      />
       <div className="main-col">
-        <TopStrip view={view} queueCount={alerts.length} apiConnected={status.api_connected} />
+        <TopStrip
+          view={view === "upload_staging" ? "operations" : view}
+          queueCount={alerts.length}
+          apiConnected={status.api_connected}
+        />
         <div className="shell">
-          {view === "operations" && <OperationsView alerts={alerts} openAlert={setActiveAlert} activeId={activeAlert?.id} onRunPipeline={runPipeline} running={running} />}
-          {view !== "operations" && <div style={{padding:"40px", textAlign:"center", color:"var(--ink-3)"}}>This view is not yet implemented in the prototype.</div>}
+          {view === "operations" && (
+            <OperationsView
+              alerts={alerts}
+              openAlert={setActiveAlert}
+              activeId={activeAlert?.id}
+              sessionId={sessionId}
+              onFileUploaded={handleFileUploaded}
+              running={running}
+            />
+          )}
+          {view === "upload_staging" && (
+            <UploadStagingView
+              sessionId={sessionId}
+              stagedFiles={stagedFiles}
+              setStagedFiles={setStagedFiles}
+              onFileUploaded={handleFileUploaded}
+              onCancel={handleCancelSession}
+              onProceed={handleProcessSession}
+              processing={processing}
+            />
+          )}
+          {view !== "operations" && view !== "upload_staging" && (
+            <div style={{ padding: "40px", textAlign: "center", color: "var(--ink-3)" }}>
+              This view is not yet implemented in the prototype.
+            </div>
+          )}
         </div>
       </div>
       {activeAlert && <Drawer alert={activeAlert} onClose={() => setActiveAlert(null)} />}
