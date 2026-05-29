@@ -125,7 +125,7 @@ def draft_collections_email(
     else:
         history_text = "(No prior email history on file.)"
 
-    prompt = f"""You are an accounts receivable specialist drafting a collections email on behalf of LedgerShield Inc.
+    prompt = f"""You are an accounts receivable specialist drafting a collections email on behalf of ACASO Inc.
 
 CLIENT DETAILS:
   Client Name   : {client_name}
@@ -145,7 +145,7 @@ Draft a collections email appropriate for the escalation tier. The email must:
 2. Reference prior communications where relevant.
 3. State a specific payment deadline (within 7 days).
 4. Apply the tone described above without deviation.
-5. Include a professional sign-off from the LedgerShield AR team.
+5. Include a professional sign-off from the ACASO AR team.
 
 Fill all fields of the CollectionsEmail model:
   - recipient: the client's billing contact email ({contact_email})

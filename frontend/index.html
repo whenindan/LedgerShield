@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LedgerShield — AI Treasury Operations</title>
+<title>ACASO — AI Treasury Operations</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -118,7 +118,7 @@ function Sidebar({ view, setView, queueCount, collapsed, onToggle }) {
       <button className="side-toggle" onClick={onToggle}><IcChevR size={12}/></button>
       <div className="side-brand">
         <div className="brand-mark" />
-        <div className="brand-text"><b>LedgerShield</b><span className="sub">Treasury Operations</span></div>
+        <div className="brand-text"><b>ACASO</b><span className="sub">Treasury Operations</span></div>
       </div>
       <div className="side-section">Workspace</div>
       <nav className="side-nav">
@@ -141,7 +141,7 @@ function TopStrip({ view, queueCount, apiConnected }) {
   const titles = { operations: "Executive Authorization Portal", cash: "Cash & Liquidity Hub", vault: "Audit Vault & Ledger", settings: "Sandbox Settings" };
   return (
     <div className="top-strip">
-      <div className="crumbs"><span>LedgerShield</span><span className="sep">/</span><b>{titles[view]}</b></div>
+      <div className="crumbs"><span>ACASO</span><span className="sep">/</span><b>{titles[view]}</b></div>
       <div className="top-pills">
         <span className="pill"><span className={`dot ${apiConnected ? "" : "amber"}`} /><span>{apiConnected ? "API Connected" : "API Offline"}</span></span>
         {queueCount > 0 && (<span className="pill"><span className="dot amber" /><span className="num">{queueCount}</span></span>)}
@@ -636,7 +636,7 @@ function UploadStagingView({ sessionId, stagedFiles, setStagedFiles, onFileUploa
               Extracting & Analysing
             </div>
             <div style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: "1.6" }}>
-              Running OCR on {stagedFiles.length} file{stagedFiles.length !== 1 ? "s" : ""}, then executing the full LedgerShield pipeline…
+              Running OCR on {stagedFiles.length} file{stagedFiles.length !== 1 ? "s" : ""}, then executing the full ACASO pipeline…
             </div>
           </div>
         </div>
@@ -742,7 +742,7 @@ function OperationsView({ alerts, openAlert, activeId, sessionId, onFileUploaded
         <div>
           <div className="eyebrow"><span className="dot"/> Daily Reconciliation</div>
           <h1>Executive <em>Authorization Portal</em></h1>
-          <p className="lede">Findings surfaced by the LedgerShield analyst. No code or communication executes without an explicit Approve.</p>
+          <p className="lede">Findings surfaced by the ACASO analyst. No code or communication executes without an explicit Approve.</p>
         </div>
         <div className="actions">
           <UploadDropMenu sessionId={sessionId} onFileUploaded={onFileUploaded} disabled={running} />

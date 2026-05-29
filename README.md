@@ -1,6 +1,6 @@
-# LedgerShield
+# ACASO
 
-LedgerShield is an AI-powered accounts payable and receivable auditor. It runs either as a single terminal command or through a modern web dashboard, and executes three sequential phases: auditing inbound vendor invoices against contract terms, detecting whether disputed invoices were already paid, and drafting escalation emails for overdue receivables.
+ACASO is an AI-powered accounts payable and receivable auditor. It runs either as a single terminal command or through a modern web dashboard, and executes three sequential phases: auditing inbound vendor invoices against contract terms, detecting whether disputed invoices were already paid, and drafting escalation emails for overdue receivables.
 
 ---
 
@@ -8,7 +8,7 @@ LedgerShield is an AI-powered accounts payable and receivable auditor. It runs e
 
 ### Phase 1 — Invoice Audit
 
-1. LedgerShield processes every invoice file uploaded in the current session.
+1. ACASO processes every invoice file uploaded in the current session.
 2. Each invoice file is sent to `gpt-4o-mini`, which extracts structured data — vendor name, invoice number, line items, subtotal, tax, and total — into an `ExtractedInvoice` object.
 3. The vendor name is fuzzy-matched (via `rapidfuzz`) against the contract files uploaded in the same session. A match score below 80 means no contract is found and the invoice is auto-passed.
 4. If a contract is found, the extracted invoice JSON and the full contract text are sent together to `gpt-4o`, which checks four things:
@@ -23,7 +23,7 @@ LedgerShield is an AI-powered accounts payable and receivable auditor. It runs e
 
 For each failed invoice:
 
-1. If a **Bank Ledger** was uploaded in the session, LedgerShield scans it to check whether the invoice was already paid via auto-pay. It matches by invoice number in the transaction description, or by amount + vendor name similarity.
+1. If a **Bank Ledger** was uploaded in the session, ACASO scans it to check whether the invoice was already paid via auto-pay. It matches by invoice number in the transaction description, or by amount + vendor name similarity.
 2. `gpt-4o-mini` drafts a formal dispute email citing each flag, the specific contract clause violated, and the dollar exposure. If the invoice was already paid, the email leads with urgency and demands an immediate refund.
 3. The drafted email is saved as JSON to `output/dispute_<invoice_number>.json`.
 
@@ -31,7 +31,7 @@ For each failed invoice:
 
 Runs only if an **AR Ledger** was uploaded in the session.
 
-1. LedgerShield reads the AR ledger CSV, which contains outstanding client invoices with aging data.
+1. ACASO reads the AR ledger CSV, which contains outstanding client invoices with aging data.
 2. Any client more than 14 days overdue is flagged as delinquent.
 3. Clients in the snooze log (`data/snooze_log.json`) are skipped if their snooze window has not expired.
 4. For each active delinquent client, the escalation tier is determined by days overdue:
@@ -70,7 +70,7 @@ A session with only **invoice + contract** runs the audit and drafts a dispute e
 
 ### Contract filename convention
 
-LedgerShield fuzzy-matches the contract filename against the vendor name extracted from the invoice. Name your contract file so it contains the vendor name:
+ACASO fuzzy-matches the contract filename against the vendor name extracted from the invoice. Name your contract file so it contains the vendor name:
 - `acme_corp_agreement.md` → matches vendor "Acme Corp"
 - `globex_msa_2024.pdf` → matches vendor "Globex Corp"
 
@@ -107,7 +107,7 @@ The `data/inbound_invoices/` and `data/contracts/` subdirectories are used by th
 ## File and Folder Reference
 
 ```
-ledgershield/
+acaso/
 │
 ├── main.py                              # CLI entry point. Reads from data/inbound_invoices/
 │                                        # and data/contracts/. Drop files there to use the CLI.
@@ -172,7 +172,7 @@ ledgershield/
 │   └── processed/                       # Extracted plain-text versions used by the pipeline.
 │
 ├── uploads.db                           # SQLite: session and file upload history.
-└── ledgershield.log                     # GENERATED at runtime. Full debug log.
+└── acaso.log                     # GENERATED at runtime. Full debug log.
 ```
 
 ---

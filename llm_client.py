@@ -1,4 +1,4 @@
-"""Centralized OpenAI API wrapper for LedgerShield."""
+"""Centralized OpenAI API wrapper for ACASO."""
 
 import logging
 from pydantic import BaseModel

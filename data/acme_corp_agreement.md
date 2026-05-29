@@ -14,7 +14,7 @@ This Master Service Agreement ("Agreement") is entered into as of the Effective 
 
 and
 
-**LedgerShield Inc.**, a Delaware corporation with its principal place of business at 101 Market Street, Suite 1400, San Francisco, CA 94105 ("Client").
+**ACASO Inc.**, a Delaware corporation with its principal place of business at 101 Market Street, Suite 1400, San Francisco, CA 94105 ("Client").
 
 Vendor and Client are each referred to herein individually as a "Party" and collectively as the "Parties."
 
@@ -78,7 +78,7 @@ By: ___________________________
 Name: Jordan Ellis  
 Title: Chief Revenue Officer  
 
-**LEDGERSHIELD INC.**  
+**ACASO INC.**  
 By: ___________________________  
 Name: Priya Nair  
 Title: Chief Financial Officer  

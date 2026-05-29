@@ -17,11 +17,11 @@ Contract Ref    : MSA-2024-0312
 --------------------------------------------------------------------------------
 BILL TO
 
-LedgerShield Inc.
+ACASO Inc.
 Accounts Payable Department
 101 Market Street, Suite 1400
 San Francisco, CA 94105
-ap@ledgershield.com
+ap@acaso.com
 
 --------------------------------------------------------------------------------
 LINE ITEMS

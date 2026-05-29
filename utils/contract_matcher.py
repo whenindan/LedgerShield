@@ -1,11 +1,30 @@
 """Fuzzy contract-to-vendor matching utilities."""
 
 import logging
+import re
 from pathlib import Path
 
 from rapidfuzz import fuzz, process
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize(text: str) -> str:
+    """Normalize text for fuzzy matching.
+
+    1. Convert to lowercase.
+    2. Replace non-alphanumeric characters with spaces.
+    3. Strip common corporate suffixes.
+    4. Remove redundant whitespace.
+    """
+    text = text.lower()
+    # Replace non-alphanumeric characters with spaces
+    text = re.sub(r"[^a-z0-9]", " ", text)
+    # Strip common corporate suffixes (as isolated words)
+    suffixes = r"\b(corp|inc|llc|ltd|limited|co|incorporated|corporation)\b"
+    text = re.sub(suffixes, "", text)
+    # Collapse multiple spaces and strip
+    return " ".join(text.split())
 
 
 def match_vendor_to_contract(
@@ -15,8 +34,9 @@ def match_vendor_to_contract(
 ) -> tuple[Path, int] | None:
     """Fuzzy-match a vendor name against a list of contract file paths.
 
-    Uses ``rapidfuzz.process.extractOne`` with default WRatio scorer to find
-    the best-matching contract file for the given vendor name.
+    Uses ``rapidfuzz.process.extractOne`` with WRatio scorer to find
+    the best-matching contract file for the given vendor name. Both inputs
+    are normalized before matching.
 
     Args:
         vendor_name: The vendor name string to match, e.g. ``"Acme Corp"``.
@@ -33,31 +53,46 @@ def match_vendor_to_contract(
         logger.warning("contract_matcher: no contract files provided for vendor '%s'", vendor_name)
         return None
 
-    stems = [p.stem for p in contract_paths]
+    # Map normalized stems back to their original paths
+    normalized_stems = {}
+    for p in contract_paths:
+        norm = _normalize(p.stem)
+        if norm:
+            normalized_stems[norm] = p
 
-    # Normalize to lowercase+underscores so "ACME CORP" matches "acme_corp_agreement"
-    normalized_vendor = vendor_name.lower().replace(" ", "_")
-    result = process.extractOne(normalized_vendor, stems, scorer=fuzz.WRatio)
+    if not normalized_stems:
+        logger.warning("contract_matcher: no valid contract stems after normalization")
+        return None
+
+    normalized_vendor = _normalize(vendor_name)
+    
+    # We use extractOne on the keys of our mapping
+    result = process.extractOne(
+        normalized_vendor, 
+        normalized_stems.keys(), 
+        scorer=fuzz.WRatio
+    )
+    
     if result is None:
         logger.warning(
             "contract_matcher: no match found for vendor '%s'", vendor_name
         )
         return None
 
-    best_stem, score, _ = result
+    best_norm, score, _ = result
     if score < min_confidence:
         logger.warning(
             "contract_matcher: best match for '%s' (normalized: '%s') was '%s' (score=%.1f) — "
             "below threshold %d",
             vendor_name,
             normalized_vendor,
-            best_stem,
+            best_norm,
             score,
             min_confidence,
         )
         return None
 
-    matched_path = next(p for p in contract_paths if p.stem == best_stem)
+    matched_path = normalized_stems[best_norm]
     return matched_path, int(score)
 
 

@@ -1,4 +1,4 @@
-"""LedgerShield — full pipeline orchestration."""
+"""ACASO — full pipeline orchestration."""
 
 import logging
 from pathlib import Path
@@ -28,7 +28,7 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("ledgershield.log"),
+        logging.FileHandler("acaso.log"),
     ],
 )
 
@@ -56,9 +56,9 @@ OUTPUT_DIR = BASE_DIR / "output"
 def print_banner(console: Console) -> None:
     console.print(
         Panel(
-            "[bold cyan]LedgerShield[/bold cyan]\n"
+            "[bold cyan]ACASO[/bold cyan]\n"
             "[dim]AI-powered invoice auditing, dispute recovery, and collections automation[/dim]",
-            title="[bold white]LEDGERSHIELD[/bold white]",
+            title="[bold white]ACASO[/bold white]",
             border_style="cyan",
             padding=(1, 4),
         )
@@ -295,7 +295,7 @@ def _tier_label(days_overdue: int) -> str:
 
 def main() -> None:
     """
-    Main orchestration function for the LedgerShield pipeline.
+    Main orchestration function for the ACASO pipeline.
     Runs all three phases sequentially with rich console output.
     """
     console = Console()

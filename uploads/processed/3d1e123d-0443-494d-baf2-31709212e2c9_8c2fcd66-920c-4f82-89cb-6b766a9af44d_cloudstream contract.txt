@@ -1,0 +1,19 @@
+MASTER SERVICES AGREEMENT
+
+This Master Services Agreement ("Agreement") is entered into as of October 14, 2025, by and between CloudStream Storage Corp ("Vendor") and Omni Pilot Startup Inc. ("Customer").
+
+1. SERVICES AND FEES
+Vendor shall provide cloud-native infrastructure, database hosting, and global data storage pipelines to Customer in accordance with the pricing and tier structures defined in the attached Exhibits. All usage fees will be compiled monthly in arrears and issued via electronic invoice.
+
+-----------------------------------------------------------------------
+EXHIBIT B: PRICING SCHEDULE AND SERVICE METRICS
+-----------------------------------------------------------------------
+
+Customer shall be billed a fixed monthly fee of $2,500.00 for standard Enterprise Database Hosting within the primary domestic region (US East). This fixed baseline includes up to 5 Terabytes of standard querying capacity.
+
+Any secondary network bandwidth allocations outside the base configuration will be scaled dynamically on an on-demand infrastructure tier. These auxiliary data pipelines will be billed at a rigid rate of $150.00 per dedicated pipeline unit.
+
+All metered multi-region data storage tiers shall be securely capped at a hard rate of $0.02 per Gigabyte (GB), regardless of global bandwidth spikes, regional server re-allocations, or unexpected cross-border data transfer volume.
+
+2. TERM AND TERMINATION
+This Agreement shall remain in effect for a period of twenty-four (24) months unless terminated earlier by either party with thirty (30) days written notice.
