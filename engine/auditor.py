@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from llm_client import extract_structured
 from models.invoice import AuditFlag, AuditResult, ExtractedInvoice
-from utils.contract_matcher import match_vendor_to_contract
+from utils.contract_matcher import match_vendor_to_contract, match_vendor_to_contract_in_dir
 from utils.file_loader import load_invoice_file, load_text_file
 
 logger = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ def audit_invoice(
     """
     extracted_invoice = extract_invoice(file_path)
 
-    match = match_vendor_to_contract(
+    match = match_vendor_to_contract_in_dir(
         vendor_name=extracted_invoice.vendor_name,
         contracts_dir=contracts_dir,
     )
@@ -214,5 +214,72 @@ def audit_all_invoices(
         result = audit_invoice(file_path, contracts_dir)
         results.append(result)
 
+    logger.info("Audit complete: %d invoice(s) processed", len(results))
+    return results
+
+
+def _audit_invoice_with_contract_paths(
+    file_path: Path,
+    contract_paths: list[Path],
+) -> AuditResult:
+    """Audit a single invoice against a specific list of contract files."""
+    extracted_invoice = extract_invoice(file_path)
+
+    match = match_vendor_to_contract(
+        vendor_name=extracted_invoice.vendor_name,
+        contract_paths=contract_paths,
+    )
+
+    if match is None:
+        logger.warning(
+            "No contract found for vendor '%s' — skipping contract comparison",
+            extracted_invoice.vendor_name,
+        )
+        return AuditResult(
+            invoice=extracted_invoice,
+            flags=[],
+            passed=True,
+            contract_file_used="NO CONTRACT FOUND",
+        )
+
+    contract_path, confidence = match
+    logger.info(
+        "Matched vendor '%s' to contract '%s' (confidence=%d)",
+        extracted_invoice.vendor_name,
+        contract_path.name,
+        confidence,
+    )
+
+    flags = compare_invoice_to_contract(extracted_invoice, contract_path)
+
+    return AuditResult(
+        invoice=extracted_invoice,
+        flags=flags,
+        passed=len(flags) == 0,
+        contract_file_used=str(contract_path),
+    )
+
+
+def audit_invoices_from_paths(
+    invoice_paths: list[Path],
+    contract_paths: list[Path],
+) -> list[AuditResult]:
+    """Audit a specific set of uploaded invoice files against uploaded contract files.
+
+    Used by the web API to scope each pipeline run to the current upload session
+    only, without touching the data/ reference directories.
+
+    Args:
+        invoice_paths: Extracted invoice file paths from the upload session.
+        contract_paths: Extracted contract file paths from the upload session.
+
+    Returns:
+        list[AuditResult]: Audit results for all processed invoices.
+    """
+    results: list[AuditResult] = []
+    for file_path in invoice_paths:
+        logger.info("Auditing uploaded invoice: %s", file_path.name)
+        result = _audit_invoice_with_contract_paths(file_path, contract_paths)
+        results.append(result)
     logger.info("Audit complete: %d invoice(s) processed", len(results))
     return results

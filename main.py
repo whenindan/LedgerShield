@@ -1,4 +1,4 @@
-"""LedgerShield — full pipeline orchestration."""
+"""ACASO — full pipeline orchestration."""
 
 import logging
 from pathlib import Path
@@ -28,7 +28,7 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("ledgershield.log"),
+        logging.FileHandler("acaso.log"),
     ],
 )
 
@@ -42,7 +42,7 @@ for _handler in _root.handlers:
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data_sandbox"
+DATA_DIR = BASE_DIR / "data"
 CONTRACTS_DIR = DATA_DIR / "contracts"
 INVOICES_DIR = DATA_DIR / "inbound_invoices"
 BANK_LEDGER = DATA_DIR / "bank_ledger.csv"
@@ -56,9 +56,9 @@ OUTPUT_DIR = BASE_DIR / "output"
 def print_banner(console: Console) -> None:
     console.print(
         Panel(
-            "[bold cyan]LedgerShield[/bold cyan]\n"
+            "[bold cyan]ACASO[/bold cyan]\n"
             "[dim]AI-powered invoice auditing, dispute recovery, and collections automation[/dim]",
-            title="[bold white]LEDGERSHIELD[/bold white]",
+            title="[bold white]ACASO[/bold white]",
             border_style="cyan",
             padding=(1, 4),
         )
@@ -295,7 +295,7 @@ def _tier_label(days_overdue: int) -> str:
 
 def main() -> None:
     """
-    Main orchestration function for the LedgerShield pipeline.
+    Main orchestration function for the ACASO pipeline.
     Runs all three phases sequentially with rich console output.
     """
     console = Console()
@@ -312,15 +312,22 @@ def main() -> None:
     for result in audit_results:
         if not result.passed:
             print_audit_flags(console, result)
-            email = run_recovery(result, BANK_LEDGER, OUTPUT_DIR)
+            email = run_recovery(
+                result,
+                BANK_LEDGER if BANK_LEDGER.exists() else None,
+                OUTPUT_DIR,
+            )
             if email:
                 dispute_emails.append(email)
                 print_dispute_email(console, email)
 
     # Phase 2: Collections
     console.rule("PHASE 2 — COLLECTIONS QUEUE")
-    collections_results = run_collections(AR_LEDGER, EMAIL_HISTORY)
-    delinquent_df = get_delinquent_clients(AR_LEDGER)
+    collections_results = run_collections(
+        AR_LEDGER     if AR_LEDGER.exists()     else None,
+        EMAIL_HISTORY if EMAIL_HISTORY.exists() else None,
+    )
+    delinquent_df = get_delinquent_clients(AR_LEDGER if AR_LEDGER.exists() else None)
     print_collections_table(console, collections_results, delinquent_df)
     for result in collections_results:
         print_collections_email(console, result)

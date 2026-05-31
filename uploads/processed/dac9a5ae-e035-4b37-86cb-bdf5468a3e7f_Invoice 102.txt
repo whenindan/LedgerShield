@@ -1,0 +1,13 @@
+CloudStream Storage Corp INVOICE
+# 102
+Date: May 27, 2026
+Bill To:
+Balance Due: $19,750.00
+Omni Pilot Startup Inc.
+Item Quantity Rate Amount
+Enterprise Database Hosting - US East 1 $2,500.00 $2,500.00
+Over-Allocation Multi-Region Data Storage 450000 $0.04 $15,750.00
+Dedicated Network Bandwidth Surcharge 10 $150.00 $1,500.00
+Subtotal: $19,750.00
+Tax (0%): $0.00
+Total: $19,750.00
