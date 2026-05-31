@@ -115,6 +115,9 @@ ledgershield/
 ├── frontend/
 │   ├── index.html                       # Single-page dashboard UI (Omni design system).
 │   │                                    # Served by FastAPI at the root route (/).
+│   │                                    # Contains the Executive Authorization Portal with
+│   │                                    # an editable email composer, signed-in user identity
+│   │                                    # pill, and session approval history.
 │   │
 │   └── v3-styles.css                    # Dashboard stylesheet. Imported by index.html.
 │
@@ -233,6 +236,14 @@ python api.py
 ```
 
 Open your browser and navigate to `http://localhost:8000`. The dashboard provides an executive authorization portal with live pipeline execution, AR book management, and alert review — all backed by the same engine as the CLI.
+
+**Authorization flow:**
+
+1. Click **Run Pipeline** to execute all three phases and populate the alert queue.
+2. Click any alert row to open the detail drawer. The drawer shows the discrepancy evidence table and an AI-drafted email.
+3. The email composer displays a **From** pill at the top identifying the signed-in user by name and ID. The email body is fully editable — adjust wording, tone, or amounts before sending.
+4. Click **Approve & Send** to dispatch the email. The alert is removed from the queue and a timestamped record (vendor, alert title, approving user name and ID) is appended to the **Approval History** panel below the queue.
+5. Click **×** to dismiss the drawer without recording any action.
 
 ---
 
