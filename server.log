@@ -1,0 +1,120 @@
+INFO:     Will watch for changes in these directories: ['/Users/victoriangannguyen/Downloads/vic_coding/YC/LedgerShield']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [3886] using StatReload
+INFO:     Started server process [3896]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61842 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61844 - "POST /api/upload/file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61852 - "GET /api/upload/session/test-session-1780012840 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61859 - "DELETE /api/upload/file/850f29a6-0e34-464d-87c0-473ed46c6a22 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61889 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61889 - "GET /static/v3-styles.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61889 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61889 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61891 - "POST /api/upload/file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61902 - "POST /api/upload/file HTTP/1.1" 200 OK
+contract_matcher: best match for 'CloudStream Storage Corp' (normalized: 'cloudstream_storage_corp') was 'eac18ca6-8f5b-4976-a726-db835f800623_cloudstream contract' (score=61.4) — below threshold 80
+No contract found for vendor 'CloudStream Storage Corp' — skipping contract comparison
+INFO:     127.0.0.1:61906 - "POST /api/upload/session/64e65582-e2e1-4ffc-8822-be39f1afbd4c/process HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3896]
+INFO:     Started server process [4850]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4850]
+INFO:     Started server process [4939]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61930 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61930 - "GET /api/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61931 - "POST /api/upload/file HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4939]
+INFO:     Started server process [4967]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61936 - "POST /api/upload/file HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+contract_matcher: best match for 'CloudStream Storage Corp' (normalized: 'cloudstream_storage_corp') was 'eac18ca6-8f5b-4976-a726-db835f800623_cloudstream contract' (score=61.4) — below threshold 80
+No contract found for vendor 'CloudStream Storage Corp' — skipping contract comparison
+contract_matcher: best match for 'CloudStream Storage Corp' (normalized: 'cloudstream_storage_corp') was 'eac18ca6-8f5b-4976-a726-db835f800623_cloudstream contract' (score=61.4) — below threshold 80
+No contract found for vendor 'CloudStream Storage Corp' — skipping contract comparison
+INFO:     127.0.0.1:61936 - "POST /api/upload/session/1e7232d3-5692-4bd4-aade-41b298de0024/process HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4967]
+INFO:     Started server process [5164]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5164]
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Started server process [5306]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5306]
+INFO:     Started server process [5318]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5318]
+INFO:     Started server process [5387]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5387]
+INFO:     Started server process [5417]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5417]
+INFO:     Started server process [5442]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5442]
+INFO:     Started server process [5457]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5457]
+INFO:     Started server process [5464]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62005 - "POST /api/upload/file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62010 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62010 - "GET /api/status HTTP/1.1" 200 OK
