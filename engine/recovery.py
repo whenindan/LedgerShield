@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 from rapidfuzz import fuzz
 
@@ -156,7 +157,7 @@ Fill all fields of the DisputeEmail model:
 
 def run_recovery(
     audit_result: AuditResult,
-    bank_ledger_path: Path,
+    bank_ledger_path: Optional[Path],
     output_dir: Path,
 ) -> DisputeEmail | None:
     """
@@ -164,7 +165,8 @@ def run_recovery(
 
     Args:
         audit_result: The audit result to act on.
-        bank_ledger_path: Path to bank_ledger.csv for payment check.
+        bank_ledger_path: Path to bank_ledger.csv for payment check, or None
+                          to skip the payment check (assumes not yet paid).
         output_dir: Directory to write dispute email JSON output.
 
     Returns:
@@ -177,10 +179,13 @@ def run_recovery(
         )
         return None
 
-    audit_result.already_paid = check_if_paid(
-        invoice=audit_result.invoice,
-        bank_ledger_path=bank_ledger_path,
-    )
+    if bank_ledger_path is not None and bank_ledger_path.exists():
+        audit_result.already_paid = check_if_paid(
+            invoice=audit_result.invoice,
+            bank_ledger_path=bank_ledger_path,
+        )
+    else:
+        audit_result.already_paid = False
 
     dispute = draft_dispute_email(audit_result)
 

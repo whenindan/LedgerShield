@@ -7,19 +7,16 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
-from models.dispute import DisputeEmail
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from engine.auditor import audit_all_invoices
-from engine.collections import get_delinquent_clients, run_collections
+from engine.auditor import audit_invoice_files
 from engine.recovery import run_recovery
 from llm_client import get_usage_summary
-from models.collections import CollectionsEmail
-from utils.file_loader import extract_text_from_upload, load_csv_as_dataframe
-from utils.snooze_store import is_snoozed, load_snooze_log
+from models.dispute import DisputeEmail
+from utils.file_loader import extract_text_from_upload
 
 logger = logging.getLogger(__name__)
 
@@ -28,34 +25,18 @@ app = FastAPI()
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 BASE_DIR      = Path(__file__).parent
-DATA_DIR      = BASE_DIR / "data_sandbox"
-CONTRACTS_DIR = DATA_DIR / "contracts"
-INVOICES_DIR  = DATA_DIR / "inbound_invoices"
-BANK_DIR      = DATA_DIR / "bank_statements"
-OTHER_DIR     = DATA_DIR / "other_docs"
-BANK_LEDGER   = DATA_DIR / "bank_ledger.csv"
-AR_LEDGER     = DATA_DIR / "accounts_receivable.csv"
-EMAIL_HISTORY = DATA_DIR / "client_email_history.json"
 OUTPUT_DIR    = BASE_DIR / "output"
 FRONTEND_DIR  = BASE_DIR / "frontend"
 UPLOADS_DIR   = BASE_DIR / "uploads"
 RAW_DIR       = UPLOADS_DIR / "raw"
 PROCESSED_DIR = UPLOADS_DIR / "processed"
+LIBRARY_DIR           = BASE_DIR / "library"
+LIBRARY_CONTRACTS_DIR = LIBRARY_DIR / "contracts"
 DB_PATH       = BASE_DIR / "uploads.db"
 
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "md", "txt"}
-MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
-
-CATEGORY_DIRS = {
-    "invoice":       INVOICES_DIR,
-    "contract":      CONTRACTS_DIR,
-    "bank_statement": BANK_DIR,
-    "other":         OTHER_DIR,
-}
-
-# Ensure all directories exist
-for _d in [OUTPUT_DIR, FRONTEND_DIR, RAW_DIR, PROCESSED_DIR, BANK_DIR, OTHER_DIR]:
-    _d.mkdir(parents=True, exist_ok=True)
+MAX_FILE_BYTES     = 50 * 1024 * 1024  # 50 MB
+VALID_CATEGORIES   = frozenset({"invoice", "contract", "bank_statement", "other"})
 
 
 # ── SQLite DB ─────────────────────────────────────────────────────────────────
@@ -81,10 +62,30 @@ def db():
         conn.close()
 
 
+def _wipe_dir(directory: Path) -> None:
+    for f in directory.iterdir():
+        if f.is_file():
+            f.unlink()
+
+
 def init_db() -> None:
+    """
+    Called once at startup. Creates directories, wipes all uploaded files and
+    the output directory, then drops and recreates the DB schema so every
+    server start begins with a clean slate.
+    """
+    for _d in [OUTPUT_DIR, FRONTEND_DIR, RAW_DIR, PROCESSED_DIR, LIBRARY_CONTRACTS_DIR]:
+        _d.mkdir(parents=True, exist_ok=True)
+
+    for _d in [RAW_DIR, PROCESSED_DIR, LIBRARY_CONTRACTS_DIR, OUTPUT_DIR]:
+        _wipe_dir(_d)
+
     with db() as conn:
         conn.executescript("""
-            CREATE TABLE IF NOT EXISTS upload_sessions (
+            DROP TABLE IF EXISTS uploaded_files;
+            DROP TABLE IF EXISTS upload_sessions;
+
+            CREATE TABLE upload_sessions (
                 session_id   TEXT PRIMARY KEY,
                 created_at   TEXT NOT NULL,
                 user_name    TEXT NOT NULL,
@@ -92,7 +93,7 @@ def init_db() -> None:
                 processed_at TEXT
             );
 
-            CREATE TABLE IF NOT EXISTS uploaded_files (
+            CREATE TABLE uploaded_files (
                 file_id           TEXT PRIMARY KEY,
                 session_id        TEXT NOT NULL,
                 original_filename TEXT NOT NULL,
@@ -110,11 +111,11 @@ def init_db() -> None:
                 FOREIGN KEY (session_id) REFERENCES upload_sessions(session_id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_files_session
+            CREATE INDEX idx_files_session
                 ON uploaded_files(session_id);
-            CREATE INDEX IF NOT EXISTS idx_files_category
+            CREATE INDEX idx_files_category
                 ON uploaded_files(category);
-            CREATE INDEX IF NOT EXISTS idx_files_uploaded_at
+            CREATE INDEX idx_files_uploaded_at
                 ON uploaded_files(uploaded_at);
         """)
 
@@ -152,7 +153,6 @@ def _row_to_session_dict(row: sqlite3.Row, files: list) -> dict:
 
 
 def _ensure_session(conn: sqlite3.Connection, session_id: str, user_name: str) -> None:
-    """Insert session row if it doesn't exist yet."""
     conn.execute(
         """
         INSERT OR IGNORE INTO upload_sessions (session_id, created_at, user_name, status)
@@ -162,8 +162,7 @@ def _ensure_session(conn: sqlite3.Connection, session_id: str, user_name: str) -
     )
 
 
-def _format_pipeline_alerts(audit_results, dispute_emails, collections_results, delinquent_df):
-    """Shared formatting logic for pipeline output → frontend alert shape."""
+def _format_pipeline_alerts(audit_results, dispute_emails) -> list:
     alerts = []
 
     for res in audit_results:
@@ -196,7 +195,7 @@ def _format_pipeline_alerts(audit_results, dispute_emails, collections_results, 
                     "tail":     f"{len(res.flags)} flags found",
                 },
                 "evidence":  evidence,
-                "clauseRef": "Contract Match",
+                "clauseRef":  "Contract Match",
                 "clauseNote": "Variance detected against loaded contract terms.",
                 "action": {
                     "kind":    "Outbound Compliance Dispute",
@@ -208,104 +207,51 @@ def _format_pipeline_alerts(audit_results, dispute_emails, collections_results, 
                 },
             })
 
-    for res in collections_results:
-        client     = res["client_name"]
-        email: CollectionsEmail = res["email"]  # type: ignore[assignment]
-        tier       = res["escalation_tier"]
-        client_row = delinquent_df[delinquent_df["client_name"] == client].iloc[0]
-        alerts.append({
-            "id":        f"COLL-{client_row['invoice_number']}",
-            "sev":       "crimson" if tier == "final_demand" else "amber",
-            "sevLabel":  tier.replace("_", " ").title(),
-            "vendor":    client,
-            "title":     f"Account receivable overdue ({client_row['days_overdue']} days)",
-            "detected":  "Just now",
-            "detectedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%b %d, %Y · %H:%M PT"),
-            "micro": [
-                {"k": "Balance Outstanding", "v": f"${client_row['amount_due']:,.2f}", "tone": "warn"},
-                {"k": "Days Past Due",        "v": f"{client_row['days_overdue']} days",  "tone": "warn"},
-            ],
-            "calc": {
-                "icon":     "snooze",
-                "headline": f"${client_row['amount_due']:,.2f} Balance Outstanding",
-                "tail":     f"Tier: {tier}",
-            },
-            "evidence": [
-                {"k": "Invoice ID",    "v": client_row["invoice_number"], "val": f"${client_row['amount_due']:,.2f}", "tone": "warn"},
-                {"k": "Days past due", "v": "Overdue", "val": f"{client_row['days_overdue']} days", "tone": "warn", "sum": True},
-            ],
-            "clauseRef":  "Service Agreement",
-            "clauseNote": f"Escalated to {tier} based on aging.",
-            "action": {
-                "kind":    f"Outbound {tier.replace('_', ' ').title()}",
-                "to":      client_row["contact_email"],
-                "cc":      "legal@ledgershield.ai",
-                "from":    "ar@ledgershield.ai",
-                "subject": email.subject,
-                "body":    email.body,
-            },
-        })
-
     return alerts
 
 
-# ── Existing endpoints ────────────────────────────────────────────────────────
+# ── Dashboard endpoints ───────────────────────────────────────────────────────
 
 @app.get("/api/status")
 async def get_status():
-    invoices_count  = len([f for f in INVOICES_DIR.iterdir() if not f.name.startswith(".")])
-    ar_df           = load_csv_as_dataframe(AR_LEDGER)
-    total_clients   = len(ar_df)
-    overdue_clients = len(ar_df[ar_df["days_overdue"] > 14])
-    snooze_log      = load_snooze_log()
-    active_snoozes  = sum(1 for e in snooze_log if is_snoozed(e["client_name"]))
-    api_connected   = os.getenv("OPENAI_API_KEY") is not None
+    with db() as conn:
+        invoices_count = conn.execute(
+            "SELECT COUNT(*) FROM uploaded_files WHERE category = 'invoice' AND status = 'extracted'"
+        ).fetchone()[0]
+        contracts_count = conn.execute(
+            "SELECT COUNT(*) FROM uploaded_files WHERE category = 'contract' AND status = 'extracted'"
+        ).fetchone()[0]
+    api_connected = os.getenv("OPENAI_API_KEY") is not None
     return {
         "invoices_count":  invoices_count,
-        "total_clients":   total_clients,
-        "overdue_clients": overdue_clients,
-        "active_snoozes":  active_snoozes,
+        "contracts_count": contracts_count,
         "api_connected":   api_connected,
     }
 
 
 @app.get("/api/data")
 async def get_all_data():
-    ar_df   = load_csv_as_dataframe(AR_LEDGER)
-    ar_book = []
-    for _, row in ar_df.iterrows():
-        client = row["client_name"]
-        snoozed = is_snoozed(client)
-        tier = "Current"
-        if row["days_overdue"] > 60:   tier = "Final Demand"
-        elif row["days_overdue"] > 30: tier = "Legal Notice"
-        elif row["days_overdue"] > 14: tier = "Firm Reminder"
-        ar_book.append({
-            "entity":    client,
-            "invoice":   row["invoice_number"],
-            "amount":    row["amount_due"],
-            "daysOverdue": row["days_overdue"],
-            "tier":      tier,
-            "lock":      "Snoozed" if snoozed else None,
-        })
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT original_filename, category, file_size, file_ext, uploaded_at, status
+            FROM uploaded_files
+            ORDER BY uploaded_at DESC
+            """
+        ).fetchall()
 
-    ingest_history = []
-    for f in INVOICES_DIR.iterdir():
-        if f.name.startswith("."): continue
-        stat = f.stat()
-        ingest_history.append({
-            "ts": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "name": f.name, "size": f"{stat.st_size // 1024} KB",
-            "ext": f.suffix[1:], "cat": "invoice", "status": "indexed", "source": "manual",
-        })
-    for f in CONTRACTS_DIR.iterdir():
-        if f.name.startswith("."): continue
-        stat = f.stat()
-        ingest_history.append({
-            "ts": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "name": f.name, "size": f"{stat.st_size // 1024} KB",
-            "ext": f.suffix[1:], "cat": "contract", "status": "indexed", "source": "manual",
-        })
+    ingest_history = [
+        {
+            "ts":     row["uploaded_at"],
+            "name":   row["original_filename"],
+            "size":   f"{row['file_size'] // 1024} KB",
+            "ext":    row["file_ext"],
+            "cat":    row["category"],
+            "status": row["status"],
+            "source": "upload",
+        }
+        for row in rows
+    ]
 
     bank_accounts = [{
         "id": "main-op", "name": "Main Operating Account", "bank": "Mercury",
@@ -313,22 +259,35 @@ async def get_all_data():
         "apy": "0.05%", "type": "Checking", "lastSync": "Live", "state": "live", "stateLabel": "Live",
     }]
 
-    return {"ar_book": ar_book, "ingest_history": ingest_history, "bank_accounts": bank_accounts}
+    return {"ar_book": [], "ingest_history": ingest_history, "bank_accounts": bank_accounts}
 
 
 @app.post("/api/run-pipeline")
 async def run_pipeline():
+    """Re-audit all previously processed invoices against the contract library."""
     try:
-        audit_results    = audit_all_invoices(INVOICES_DIR, CONTRACTS_DIR)
-        dispute_emails   = []
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT pipeline_path FROM uploaded_files "
+                "WHERE category = 'invoice' AND status = 'extracted'"
+            ).fetchall()
+
+        invoice_paths: list[Path] = []
+        for r in rows:
+            if r["pipeline_path"]:
+                p = Path(r["pipeline_path"])
+                if p.exists():
+                    invoice_paths.append(p)
+
+        audit_results  = audit_invoice_files(invoice_paths, LIBRARY_CONTRACTS_DIR)
+        dispute_emails = []
         for res in audit_results:
             if not res.passed:
-                email = run_recovery(res, BANK_LEDGER, OUTPUT_DIR)
+                email = run_recovery(res, None, OUTPUT_DIR)
                 if email:
                     dispute_emails.append(email)
-        collections_results = run_collections(AR_LEDGER, EMAIL_HISTORY)
-        delinquent_df       = get_delinquent_clients(AR_LEDGER)
-        alerts = _format_pipeline_alerts(audit_results, dispute_emails, collections_results, delinquent_df)
+
+        alerts = _format_pipeline_alerts(audit_results, dispute_emails)
         return {"alerts": alerts, "usage": get_usage_summary()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -344,11 +303,12 @@ async def upload_file(
     user_name:  str        = Form("Sarah Jenkins (CFO)"),
 ):
     """Accept one file, persist to disk, record in DB, return file metadata."""
-    # Validate category
-    if category not in CATEGORY_DIRS:
-        raise HTTPException(status_code=400, detail=f"Invalid category '{category}'. Must be one of: {list(CATEGORY_DIRS)}")
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category '{category}'. Must be one of: {sorted(VALID_CATEGORIES)}",
+        )
 
-    # Validate extension — file.filename is typed str | None by Starlette
     filename = file.filename or ""
     if not filename:
         raise HTTPException(status_code=400, detail="Upload must include a filename.")
@@ -359,17 +319,15 @@ async def upload_file(
             detail=f"File type '.{ext}' not allowed. Accepted: {sorted(ALLOWED_EXTENSIONS)}",
         )
 
-    # Read and size-check
     content = await file.read()
     if len(content) > MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds 50 MB limit.")
 
-    file_id        = str(uuid.uuid4())
-    stored_name    = f"{file_id}_{filename}"
-    raw_path       = RAW_DIR / stored_name
-    now            = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    file_id     = str(uuid.uuid4())
+    stored_name = f"{file_id}_{filename}"
+    raw_path    = RAW_DIR / stored_name
+    now         = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    # Write raw file
     raw_path.write_bytes(content)
 
     with db() as conn:
@@ -424,7 +382,10 @@ async def delete_file(file_id: str):
         if not row:
             raise HTTPException(status_code=404, detail="File not found.")
         if row["status"] not in ("staged", "failed"):
-            raise HTTPException(status_code=409, detail="Cannot delete a file that has already been processed.")
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete a file that has already been processed.",
+            )
         raw = Path(row["raw_path"])
         if raw.exists():
             raw.unlink()
@@ -441,8 +402,11 @@ async def cancel_session(session_id: str):
         ).fetchone()
         if not session:
             raise HTTPException(status_code=404, detail="Session not found.")
-        if session["status"] not in ("staging",):
-            raise HTTPException(status_code=409, detail=f"Session is already '{session['status']}' — cannot cancel.")
+        if session["status"] != "staging":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Session is already '{session['status']}' — cannot cancel.",
+            )
 
         files = conn.execute(
             "SELECT raw_path FROM uploaded_files WHERE session_id = ?", (session_id,)
@@ -467,8 +431,8 @@ async def process_session(session_id: str):
     For every staged file in the session:
       1. Extract text (pdfplumber / pytesseract / direct read).
       2. Write extracted .txt to uploads/processed/.
-      3. Copy extracted text to the appropriate pipeline directory.
-    Then run the full pipeline and return alerts.
+      3. For contracts: copy into library/contracts/ so they persist across sessions.
+    Then run the invoice audit pipeline against only the invoices in this session.
     """
     with db() as conn:
         session = conn.execute(
@@ -477,7 +441,10 @@ async def process_session(session_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found.")
         if session["status"] != "staging":
-            raise HTTPException(status_code=409, detail=f"Session status is '{session['status']}' — cannot process.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Session status is '{session['status']}' — cannot process.",
+            )
 
         files = conn.execute(
             "SELECT * FROM uploaded_files WHERE session_id = ? AND status = 'staged'",
@@ -487,23 +454,22 @@ async def process_session(session_id: str):
     if not files:
         raise HTTPException(status_code=400, detail="No staged files in this session.")
 
-    # Mark session as processing
     with db() as conn:
         conn.execute(
             "UPDATE upload_sessions SET status = 'processing' WHERE session_id = ?", (session_id,)
         )
 
-    processed_files = []
-    extraction_errors = []
+    processed_files:   list[dict] = []
+    extraction_errors: list[dict] = []
+    invoice_paths:     list[Path] = []
 
     for row in files:
-        file_id  = row["file_id"]
-        raw_path = Path(row["raw_path"])
-        ext      = row["file_ext"]
-        category = row["category"]
+        file_id   = row["file_id"]
+        raw_path  = Path(row["raw_path"])
+        ext       = row["file_ext"]
+        category  = row["category"]
         orig_name = row["original_filename"]
 
-        # Mark as extracting
         with db() as conn:
             conn.execute(
                 "UPDATE uploaded_files SET status = 'extracting' WHERE file_id = ?", (file_id,)
@@ -513,23 +479,29 @@ async def process_session(session_id: str):
             # 1. Extract text
             text = extract_text_from_upload(raw_path, ext)
 
-            # 2. Write to processed dir as .txt
+            # 2. Write extracted .txt to uploads/processed/
             stem           = Path(orig_name).stem
             extracted_name = f"{file_id}_{stem}.txt"
             extracted_path = PROCESSED_DIR / extracted_name
             extracted_path.write_text(text, encoding="utf-8")
 
-            # 3. Copy to the pipeline directory
-            pipeline_dir      = CATEGORY_DIRS[category]
-            pipeline_filename = f"{file_id}_{stem}.txt"
-            pipeline_path     = pipeline_dir / pipeline_filename
-            shutil.copy2(str(extracted_path), str(pipeline_path))
+            # 3. Route by category.
+            #    Contracts are copied into the persistent library so they are
+            #    available to all future sessions. Everything else stays in
+            #    uploads/processed/ — nothing is written to a shared data dir.
+            if category == "contract":
+                pipeline_path = LIBRARY_CONTRACTS_DIR / extracted_name
+                shutil.copy2(str(extracted_path), str(pipeline_path))
+            else:
+                pipeline_path = extracted_path
+                if category == "invoice":
+                    invoice_paths.append(pipeline_path)
 
             with db() as conn:
                 conn.execute(
                     """
                     UPDATE uploaded_files
-                    SET status = 'extracted',
+                    SET status         = 'extracted',
                         extracted_path = ?,
                         pipeline_path  = ?
                     WHERE file_id = ?
@@ -538,11 +510,11 @@ async def process_session(session_id: str):
                 )
 
             processed_files.append({
-                "file_id":      file_id,
-                "filename":     orig_name,
-                "category":     category,
+                "file_id":       file_id,
+                "filename":      orig_name,
+                "category":      category,
                 "pipeline_path": str(pipeline_path),
-                "status":       "extracted",
+                "status":        "extracted",
             })
 
         except Exception as exc:
@@ -554,19 +526,17 @@ async def process_session(session_id: str):
                     (str(exc), file_id),
                 )
 
-    # Run the pipeline now that files are in place
+    # Audit only the invoices uploaded in this session against the contract library.
     try:
-        audit_results       = audit_all_invoices(INVOICES_DIR, CONTRACTS_DIR)
-        dispute_emails      = []
+        audit_results  = audit_invoice_files(invoice_paths, LIBRARY_CONTRACTS_DIR)
+        dispute_emails = []
         for res in audit_results:
             if not res.passed:
-                email = run_recovery(res, BANK_LEDGER, OUTPUT_DIR)
+                email = run_recovery(res, None, OUTPUT_DIR)
                 if email:
                     dispute_emails.append(email)
-        collections_results = run_collections(AR_LEDGER, EMAIL_HISTORY)
-        delinquent_df       = get_delinquent_clients(AR_LEDGER)
-        alerts = _format_pipeline_alerts(audit_results, dispute_emails, collections_results, delinquent_df)
-        usage  = get_usage_summary()
+        alerts         = _format_pipeline_alerts(audit_results, dispute_emails)
+        usage          = get_usage_summary()
         pipeline_error = None
     except Exception as exc:
         logger.error("Pipeline failed after upload processing: %s", exc)
@@ -574,7 +544,6 @@ async def process_session(session_id: str):
         usage          = {}
         pipeline_error = str(exc)
 
-    # Mark session complete
     with db() as conn:
         conn.execute(
             """
@@ -586,24 +555,25 @@ async def process_session(session_id: str):
         )
 
     return {
-        "session_id":       session_id,
-        "processed_files":  processed_files,
+        "session_id":        session_id,
+        "processed_files":   processed_files,
         "extraction_errors": extraction_errors,
-        "alerts":           alerts,
-        "usage":            usage,
-        "pipeline_error":   pipeline_error,
+        "alerts":            alerts,
+        "usage":             usage,
+        "pipeline_error":    pipeline_error,
     }
 
 
 @app.get("/api/upload/history")
-async def get_upload_history(limit: int = 100, offset: int = 0, category: Optional[str] = None):
-    """
-    Return paginated upload history across all sessions.
-    Optionally filter by category.
-    """
+async def get_upload_history(
+    limit:    int            = 100,
+    offset:   int            = 0,
+    category: Optional[str] = None,
+):
+    """Return paginated upload history across all sessions."""
     with db() as conn:
         if category:
-            if category not in CATEGORY_DIRS:
+            if category not in VALID_CATEGORIES:
                 raise HTTPException(status_code=400, detail=f"Invalid category '{category}'.")
             rows = conn.execute(
                 """

@@ -191,15 +191,20 @@ def audit_invoice(
     )
 
 
-def audit_all_invoices(
-    invoices_dir: Path,
+
+def audit_invoice_files(
+    invoice_paths: list[Path],
     contracts_dir: Path,
 ) -> list[AuditResult]:
     """
-    Processes every invoice file in the invoices directory.
+    Processes a specific list of invoice file paths.
+
+    Unlike audit_all_invoices, this does not scan a directory — it operates
+    only on the paths explicitly provided. Used by the upload pipeline so that
+    only the files the user uploaded are audited, never pre-existing demo data.
 
     Args:
-        invoices_dir: Path to directory containing invoice files.
+        invoice_paths: Explicit list of invoice file paths to audit.
         contracts_dir: Path to directory containing contract files.
 
     Returns:
@@ -207,8 +212,9 @@ def audit_all_invoices(
     """
     results: list[AuditResult] = []
 
-    for file_path in invoices_dir.iterdir():
-        if file_path.name.startswith(".") or file_path.is_dir():
+    for file_path in invoice_paths:
+        if not file_path.exists():
+            logger.warning("Invoice file not found, skipping: %s", file_path)
             continue
         logger.info("Auditing invoice file: %s", file_path.name)
         result = audit_invoice(file_path, contracts_dir)
