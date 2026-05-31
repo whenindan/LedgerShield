@@ -106,6 +106,9 @@ const IcArrowRight = (p) => (<Icon {...p}><line x1="5" y1="12" x2="19" y2="12"/>
 /* --- COMPONENTS --- */
 const { useState, useEffect, useCallback, useRef } = React;
 
+const CURRENT_USER = { name: "Admin Doe", id: "USR-001" };
+function initials(name) { return name.split(" ").map(n => n[0]).join("").toUpperCase(); }
+
 function Sidebar({ view, setView, queueCount, collapsed, onToggle }) {
   const items = [
     { id: "operations", label: "Operations Dashboard", icon: <IcShieldAlert size={15}/>, badge: queueCount, alert: true },
@@ -181,6 +184,7 @@ function AlertRow({ a, active, onClick }) {
   );
 }
 
+function OperationsView({ alerts, openAlert, activeId, onRunPipeline, running, history }) {
 /* ─────────────────────────────────────────────────────────────────────────
    Upload Drop‑Menu — pre‑ingestion document selector
    ───────────────────────────────────────────────────────────────────────── */
@@ -769,11 +773,37 @@ function OperationsView({ alerts, openAlert, activeId, sessionId, onFileUploaded
           </div>
         )}
       </div>
+      <div className="hist-panel">
+        <div className="hist-panel-head">
+          <h3>Approval History</h3>
+          <span className="count">{history.length}</span>
+        </div>
+        {history.length === 0
+          ? <div className="hist-empty">No approvals recorded this session.</div>
+          : history.map((h, i) => (
+            <div key={i} className="hist-row">
+              <div className="hist-badge"><IcCheck size={14}/></div>
+              <div className="hist-info">
+                <div className="vendor-tag">{h.vendor}</div>
+                <div className="alert-title">{h.alertTitle}</div>
+              </div>
+              <div className="hist-meta">
+                <div className="who">
+                  {h.userName}
+                  <span className="uid-tag">{h.userId}</span>
+                </div>
+                <div className="when">{h.timestamp}</div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
     </>
   );
 }
 
-function Drawer({ alert, onClose }) {
+function Drawer({ alert, onClose, onApprove, currentUser }) {
+  const [emailBody, setEmailBody] = useState(alert.action.body);
   return (
     <>
       <div className="drawer-bg" onClick={onClose} />
@@ -799,16 +829,31 @@ function Drawer({ alert, onClose }) {
           <section className="section">
             <header className="section-head"><span className="pip"><IcMail/></span><h3>AI Action Draft</h3></header>
             <div className="action-leg">
-               <div className="al-fields">
+              <div className="mail-sender">
+                <span className="label">From</span>
+                <span className="sender-pill">
+                  <span className="av">{initials(currentUser.name)}</span>
+                  <span>{currentUser.name}</span>
+                  <span className="sep">·</span>
+                  <span className="uid">{currentUser.id}</span>
+                </span>
+              </div>
+              <div className="al-fields">
                 <div className="k">To</div><div className="v">{alert.action.to}</div>
                 <div className="k">Subject</div><div className="v"><b>{alert.action.subject}</b></div>
               </div>
-              <textarea className="al-body" defaultValue={alert.action.body} readOnly />
+              <textarea
+                className="al-body"
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
+              />
             </div>
           </section>
         </div>
         <div className="drawer-foot">
-          <button className="btn btn-emerald btn-block" onClick={onClose}><IcSend size={14}/> Approve & Execute</button>
+          <button className="btn btn-emerald btn-block" onClick={() => onApprove(emailBody)}>
+            <IcSend size={14}/> Approve &amp; Send
+          </button>
         </div>
       </aside>
     </>
@@ -822,6 +867,7 @@ function App() {
   const [status, setStatus]       = useState({ api_connected: false });
   const [running, setRunning]     = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [history, setHistory] = useState([]);
   const [sessionId, setSessionId] = useState(genUUID);
   const [stagedFiles, setStagedFiles] = useState([]);
   const [processing, setProcessing]   = useState(false);
@@ -846,6 +892,21 @@ function App() {
     setStagedFiles([]);
     setSessionId(genUUID());
     setView("operations");
+  };
+
+  const handleApprove = (editedBody) => {
+    const record = {
+      alertId: activeAlert.id,
+      alertTitle: activeAlert.title,
+      vendor: activeAlert.vendor,
+      userId: CURRENT_USER.id,
+      userName: CURRENT_USER.name,
+      timestamp: new Date().toLocaleString(),
+      emailBody: editedBody,
+    };
+    setHistory(prev => [record, ...prev]);
+    setAlerts(prev => prev.filter(a => a.id !== activeAlert.id));
+    setActiveAlert(null);
   };
 
   // Proceed: run OCR + pipeline, show results
@@ -891,6 +952,8 @@ function App() {
           apiConnected={status.api_connected}
         />
         <div className="shell">
+          {view === "operations" && <OperationsView alerts={alerts} openAlert={setActiveAlert} activeId={activeAlert?.id} onRunPipeline={runPipeline} running={running} history={history} />}
+          {view !== "operations" && <div style={{padding:"40px", textAlign:"center", color:"var(--ink-3)"}}>This view is not yet implemented in the prototype.</div>}
           {view === "operations" && (
             <OperationsView
               alerts={alerts}
@@ -919,7 +982,7 @@ function App() {
           )}
         </div>
       </div>
-      {activeAlert && <Drawer alert={activeAlert} onClose={() => setActiveAlert(null)} />}
+      {activeAlert && <Drawer key={activeAlert.id} alert={activeAlert} onClose={() => setActiveAlert(null)} onApprove={handleApprove} currentUser={CURRENT_USER} />}
     </div>
   );
 }
